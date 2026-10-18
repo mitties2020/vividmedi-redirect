@@ -1,604 +1,71 @@
 <!doctype html>
-<html lang="en-AU">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#123f45" />
-    <meta
-      name="description"
-      content="CareQuay local demonstration portal for Mental Health Hospital in the Home care."
-    />
-    <title>CareQuay — Mental Health Hospital in the Home</title>
-    <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>CareQuay — Temporarily offline</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f7f8;
+      color: #17323b;
+    }
 
-    <div class="demo-banner">
-      <span>Demonstration only</span>
-      <p>Not connected to WA Health systems. Do not enter real patient information.</p>
-    </div>
+    * { box-sizing: border-box; }
 
-    <section class="login-screen" id="login-screen" aria-labelledby="login-title">
-      <div class="login-brand-panel">
-        <div class="login-brand-inner">
-          <div class="brand brand-light">
-            <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
-              <path d="M23.5 5a19 19 0 1 0 12.8 33" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" />
-              <path d="M23.5 15a9 9 0 1 0 6.4 15.4" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity=".5" />
-              <path d="m28 28 11 11" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" />
-            </svg>
-            <span>CareQuay</span>
-          </div>
-          <div class="login-intro">
-            <p class="overline overline-light">Mental Health Hospital in the Home</p>
-            <h1>Care at home.<br />Your plan in one place.</h1>
-            <p>
-              Choose a visit time, work on your safety plan, update your team and keep track of what matters to you.
-            </p>
-          </div>
-          <div class="login-assurance">
-            <span class="assurance-icon">✓</span>
-            <p><strong>Designed around shared care</strong><br />You and your treating team can review the same plan.</p>
-          </div>
-        </div>
-      </div>
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
 
-      <div class="login-form-panel">
-        <form class="login-card" id="login-form">
-          <p class="overline">Secure demo access</p>
-          <h2 id="login-title">Welcome to CareQuay</h2>
-          <p class="login-help">Choose the view you want to demonstrate, then enter the access code.</p>
+    main {
+      width: min(560px, 100%);
+      padding: 40px;
+      border: 1px solid #d8e2e5;
+      border-radius: 16px;
+      background: #ffffff;
+      box-shadow: 0 14px 36px rgba(23, 50, 59, 0.08);
+      text-align: center;
+    }
 
-          <fieldset class="role-switch">
-            <legend class="sr-only">Choose a portal</legend>
-            <label>
-              <input type="radio" name="role" value="patient" checked />
-              <span><strong>Patient</strong><small>My visits and care plan</small></span>
-            </label>
-            <label>
-              <input type="radio" name="role" value="team" />
-              <span><strong>Care team</strong><small>Patient overview</small></span>
-            </label>
-          </fieldset>
+    .mark {
+      display: inline-grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      margin-bottom: 18px;
+      border-radius: 13px;
+      background: #0b6f73;
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -1px;
+    }
 
-          <label class="field-label" for="display-name">Your name <span>(demo)</span></label>
-          <input class="text-input" id="display-name" name="display-name" type="text" value="Jordan" autocomplete="off" />
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(26px, 6vw, 36px);
+      line-height: 1.15;
+    }
 
-          <label class="field-label" for="access-code">Access code</label>
-          <div class="password-wrap">
-            <input class="text-input" id="access-code" name="access-code" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" required />
-            <button class="show-code" id="show-code" type="button" aria-label="Show access code">Show</button>
-          </div>
-          <p class="form-error" id="login-error" role="alert"></p>
-          <button class="button button-primary button-wide" type="submit">Continue <span aria-hidden="true">→</span></button>
-          <p class="privacy-note">This local prototype stores demo entries in this browser only.</p>
-        </form>
-      </div>
-    </section>
-
-    <div class="app-shell" id="app-shell" hidden>
-      <header class="app-header">
-        <button class="mobile-menu" id="mobile-menu" aria-label="Open menu" aria-expanded="false">☰</button>
-        <a class="brand" href="#" data-nav="home" aria-label="CareQuay home">
-          <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
-            <path d="M23.5 5a19 19 0 1 0 12.8 33" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" />
-            <path d="m28 28 11 11" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" />
-          </svg>
-          <span>CareQuay</span>
-        </a>
-        <div class="header-context">
-          <span class="service-name">Mental Health Hospital in the Home</span>
-          <span class="prototype-pill">Prototype</span>
-        </div>
-        <div class="header-actions">
-          <button class="help-shortcut" data-action="unsafe">I don’t feel safe</button>
-          <div class="user-menu">
-            <span class="user-avatar" id="user-avatar">J</span>
-            <span class="user-details"><strong id="user-name">Jordan</strong><small id="user-role">Patient portal</small></span>
-            <button class="sign-out" id="sign-out" type="button">Sign out</button>
-          </div>
-        </div>
-      </header>
-
-      <aside class="app-sidebar" id="app-sidebar">
-        <nav class="app-nav patient-nav" id="patient-nav" aria-label="Patient portal">
-          <p class="nav-label">My care</p>
-          <button class="nav-item active" data-view="home"><span class="nav-icon">⌂</span><span>Today</span></button>
-          <button class="nav-item" data-view="visits"><span class="nav-icon">▦</span><span>My visits</span><span class="nav-badge" id="visit-badge">1</span></button>
-          <button class="nav-item" data-view="safety"><span class="nav-icon">♡</span><span>My safety plan</span><span class="nav-status" id="safety-nav-status">3/7</span></button>
-          <button class="nav-item" data-view="help"><span class="nav-icon">?</span><span>I need some help</span></button>
-          <button class="nav-item" data-view="message"><span class="nav-icon">✎</span><span>Update my team</span></button>
-          <button class="nav-item" data-view="progress"><span class="nav-icon">↗</span><span>Track my progress</span></button>
-        </nav>
-
-        <nav class="app-nav team-nav" id="team-nav" aria-label="Care team portal" hidden>
-          <p class="nav-label">Care team</p>
-          <button class="nav-item active" data-view="team-home"><span class="nav-icon">⌂</span><span>Overview</span></button>
-          <button class="nav-item" data-view="team-patients"><span class="nav-icon">◉</span><span>Patients</span><span class="nav-badge">4</span></button>
-          <button class="nav-item" data-view="team-requests"><span class="nav-icon">▦</span><span>Visit requests</span><span class="nav-badge accent" id="request-count">1</span></button>
-          <button class="nav-item" data-view="team-messages"><span class="nav-icon">✎</span><span>Updates</span><span class="nav-badge accent" id="message-count">0</span></button>
-          <button class="nav-item" data-view="team-progress"><span class="nav-icon">↗</span><span>Progress</span></button>
-        </nav>
-
-        <div class="sidebar-footer">
-          <div class="local-note"><span>○</span><p><strong>Local demo</strong><br />No clinical system connection</p></div>
-          <button id="reset-demo" class="reset-link" type="button">Reset demo data</button>
-        </div>
-      </aside>
-
-      <main class="app-main" id="main-content">
-        <section class="view active" id="view-home" data-view-panel="home">
-          <div class="page-heading">
-            <div>
-              <p class="overline" id="today-date">Today</p>
-              <h2>Good morning, <span data-patient-name>Jordan</span>.</h2>
-              <p>Here is what is happening with your care today.</p>
-            </div>
-            <button class="button button-secondary" data-view-link="message">Update my team <span>→</span></button>
-          </div>
-
-          <div class="dashboard-grid">
-            <article class="card next-visit-card span-2">
-              <div class="card-header">
-                <div><p class="card-kicker">Next visit</p><h3>Daily home visit</h3></div>
-                <span class="status-pill status-confirmed">Confirmed</span>
-              </div>
-              <div class="visit-summary">
-                <div class="date-tile"><strong id="next-visit-day">16</strong><span id="next-visit-month">OCT</span></div>
-                <div class="visit-details">
-                  <strong id="next-visit-time">10:30 am – 11:30 am</strong>
-                  <span>Home visit · Mental health nurse</span>
-                  <small>Your clinician will call if the time changes.</small>
-                </div>
-              </div>
-              <div class="card-actions">
-                <button class="text-button" data-view-link="visits">Choose another time</button>
-                <button class="text-button" data-request-telehealth>Request telehealth instead</button>
-              </div>
-            </article>
-
-            <article class="card check-in-card">
-              <div class="card-header compact"><div><p class="card-kicker">Quick check-in</p><h3>How are you travelling today?</h3></div></div>
-              <div class="mood-picker" role="radiogroup" aria-label="How are you travelling today?">
-                <button data-mood="1" aria-label="Very difficult">1<span>Very difficult</span></button>
-                <button data-mood="2" aria-label="Difficult">2<span>Difficult</span></button>
-                <button data-mood="3" aria-label="Mixed">3<span>Mixed</span></button>
-                <button data-mood="4" aria-label="Okay">4<span>Okay</span></button>
-                <button data-mood="5" aria-label="Going well">5<span>Going well</span></button>
-              </div>
-              <p class="microcopy" id="mood-message">Choose one if you would like your team to see it.</p>
-            </article>
-
-            <article class="card safety-card">
-              <div class="card-icon sea">♡</div>
-              <p class="card-kicker">My safety plan</p>
-              <h3>Your plan is underway</h3>
-              <div class="progress-bar"><span id="safety-progress-bar" style="width: 43%"></span></div>
-              <div class="progress-row"><span id="safety-progress-text">3 of 7 sections complete</span><strong id="safety-progress-percent">43%</strong></div>
-              <button class="button button-soft button-wide" data-view-link="safety">Continue my plan</button>
-            </article>
-
-            <article class="card goal-card">
-              <div class="card-icon amber">↗</div>
-              <p class="card-kicker">A small step</p>
-              <h3 id="featured-goal-title">Spend 10 minutes outside</h3>
-              <p id="featured-goal-note">A gentle goal for this admission. It is okay to change it.</p>
-              <div class="goal-check-row">
-                <button id="goal-done-button" class="goal-check">✓</button>
-                <span id="goal-done-label">Mark as done today</span>
-              </div>
-            </article>
-
-            <article class="card help-card span-2">
-              <div>
-                <p class="card-kicker">Support is available</p>
-                <h3>You do not have to work it out alone.</h3>
-                <p>See your own coping steps and support people, or find the right number to call.</p>
-              </div>
-              <div class="help-card-actions">
-                <button class="button button-secondary" data-view-link="help">I need some help</button>
-                <button class="button button-danger" data-action="unsafe">I don’t feel safe</button>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section class="view" id="view-visits" data-view-panel="visits">
-          <div class="page-heading">
-            <div><p class="overline">Daily care</p><h2>My visits</h2><p>Tell the team which time works best. A request is not confirmed until the team accepts it.</p></div>
-          </div>
-
-          <div class="two-column-layout visits-layout">
-            <div class="main-column">
-              <article class="card appointment-card">
-                <div class="card-header"><div><p class="card-kicker">Choose a day</p><h3>Visit preference</h3></div><span class="status-pill">Daily</span></div>
-                <div class="week-picker" id="week-picker" aria-label="Choose a visit day"></div>
-
-                <fieldset class="visit-type-picker">
-                  <legend>How would you prefer to meet?</legend>
-                  <label><input type="radio" name="visit-type" value="Home visit" checked /><span><b>Home visit</b><small>A clinician visits your home</small></span></label>
-                  <label><input type="radio" name="visit-type" value="Telehealth" /><span><b>Telehealth</b><small>Request a video review</small></span></label>
-                </fieldset>
-
-                <fieldset class="time-picker">
-                  <legend>Preferred time window</legend>
-                  <label><input type="radio" name="visit-time" value="8:00 am – 10:00 am" /><span>8–10 am</span></label>
-                  <label><input type="radio" name="visit-time" value="10:00 am – 12:00 pm" checked /><span>10 am–12 pm</span></label>
-                  <label><input type="radio" name="visit-time" value="12:00 pm – 2:00 pm" /><span>12–2 pm</span></label>
-                  <label><input type="radio" name="visit-time" value="2:00 pm – 4:00 pm" /><span>2–4 pm</span></label>
-                  <label><input type="radio" name="visit-time" value="4:00 pm – 6:00 pm" /><span>4–6 pm</span></label>
-                </fieldset>
-
-                <label class="field-label" for="visit-note">Anything the team should know? <span>(optional)</span></label>
-                <textarea class="textarea-input" id="visit-note" rows="3" placeholder="For example: I have another appointment at 2 pm."></textarea>
-                <button class="button button-primary" id="save-visit">Send visit preference</button>
-                <p class="inline-status" id="visit-status" aria-live="polite"></p>
-              </article>
-            </div>
-
-            <aside class="side-column">
-              <article class="card compact-card">
-                <p class="card-kicker">Coming up</p>
-                <div class="timeline" id="visit-timeline"></div>
-              </article>
-              <article class="info-panel">
-                <strong>Need to change today’s visit?</strong>
-                <p>Contact your MH HITH team directly. Portal requests may not be seen straight away.</p>
-              </article>
-            </aside>
-          </div>
-        </section>
-
-        <section class="view" id="view-safety" data-view-panel="safety">
-          <div class="page-heading safety-heading">
-            <div><p class="overline">Shared safety planning</p><h2>My safety plan</h2><p>This plan belongs to you. Build it with your clinician and choose who else may receive a copy.</p></div>
-            <div class="heading-progress"><strong id="safety-heading-percent">43%</strong><span>complete</span></div>
-          </div>
-
-          <div class="safety-layout">
-            <nav class="safety-steps" aria-label="Safety plan sections">
-              <button class="safety-step active" data-safety-step="1"><span>1</span><b>What matters to me</b><i>✓</i></button>
-              <button class="safety-step" data-safety-step="2"><span>2</span><b>Signs things are changing</b><i>✓</i></button>
-              <button class="safety-step" data-safety-step="3"><span>3</span><b>Things I can do</b><i>✓</i></button>
-              <button class="safety-step" data-safety-step="4"><span>4</span><b>People who support me</b><i>✓</i></button>
-              <button class="safety-step" data-safety-step="5"><span>5</span><b>Professional support</b><i>✓</i></button>
-              <button class="safety-step" data-safety-step="6"><span>6</span><b>Making my space safer</b><i>✓</i></button>
-              <button class="safety-step" data-safety-step="7"><span>7</span><b>If I need urgent help</b><i>✓</i></button>
-              <button class="safety-review-button" id="review-safety-plan">Review the whole plan</button>
-            </nav>
-
-            <div class="safety-form card">
-              <div class="safety-panel active" data-safety-panel="1">
-                <p class="step-count">Section 1 of 7</p>
-                <h3>What matters to me</h3>
-                <p class="form-intro">Start with the people, roles, places or hopes that make safety and recovery important to you.</p>
-                <label class="field-label" for="reasons-safe">Reasons I want to stay safe</label>
-                <textarea class="textarea-input safety-input" id="reasons-safe" data-safety-key="reasons" rows="5" placeholder="People I care about, plans I have, responsibilities, beliefs, pets, places..."></textarea>
-                <label class="field-label" for="future-looking">Something I would like to move towards</label>
-                <input class="text-input safety-input" id="future-looking" data-safety-key="future" type="text" placeholder="It can be small and practical." />
-              </div>
-
-              <div class="safety-panel" data-safety-panel="2">
-                <p class="step-count">Section 2 of 7</p>
-                <h3>Signs things are changing</h3>
-                <p class="form-intro">What do you notice first when distress is building? There are no wrong answers.</p>
-                <label class="field-label" for="warning-signs">My early warning signs</label>
-                <textarea class="textarea-input safety-input" id="warning-signs" data-safety-key="warnings" rows="5" placeholder="For example: sleeping less, withdrawing, racing thoughts, not eating, feeling trapped..."></textarea>
-                <label class="field-label" for="triggers">Situations or triggers that can make things harder</label>
-                <textarea class="textarea-input safety-input" id="triggers" data-safety-key="triggers" rows="4" placeholder="Only include what feels useful to name."></textarea>
-              </div>
-
-              <div class="safety-panel" data-safety-panel="3">
-                <p class="step-count">Section 3 of 7</p>
-                <h3>Things I can do</h3>
-                <p class="form-intro">Choose strategies that have helped before, even a little. Keep the list realistic for a difficult day.</p>
-                <div class="choice-chips" id="hobby-chips">
-                  <button type="button" data-coping="Music">Music</button><button type="button" data-coping="Walking">Walking</button><button type="button" data-coping="Pets">Pets</button><button type="button" data-coping="Gaming">Gaming</button><button type="button" data-coping="Gardening">Gardening</button><button type="button" data-coping="Art or craft">Art or craft</button><button type="button" data-coping="A shower">A shower</button><button type="button" data-coping="Quiet space">Quiet space</button>
-                </div>
-                <label class="field-label" for="coping-other">My own ideas</label>
-                <textarea class="textarea-input safety-input" id="coping-other" data-safety-key="coping" rows="4" placeholder="A hobby, routine, place or reminder that helps me get through the next hour..."></textarea>
-                <label class="field-label" for="coping-order">The first thing I will try</label>
-                <input class="text-input safety-input" id="coping-order" data-safety-key="firstAction" type="text" placeholder="Make it specific and easy to start." />
-              </div>
-
-              <div class="safety-panel" data-safety-panel="4">
-                <p class="step-count">Section 4 of 7</p>
-                <h3>People who support me</h3>
-                <p class="form-intro">Add family, friends, carers, Elders, community or cultural supports. Sharing is always your choice.</p>
-                <div id="support-list" class="support-list"></div>
-                <button type="button" class="button button-secondary" id="add-support-person">+ Add a support person</button>
-                <div class="consent-panel">
-                  <label class="checkbox-row"><input type="checkbox" id="share-safety-plan" /><span><strong>I would like my team to discuss sharing this plan</strong><small>No message is sent in this demo. In a real service, the team would confirm what to share and with whom.</small></span></label>
-                </div>
-              </div>
-
-              <div class="safety-panel" data-safety-panel="5">
-                <p class="step-count">Section 5 of 7</p>
-                <h3>Professional support</h3>
-                <p class="form-intro">People and services I can contact before things become an emergency.</p>
-                <div class="field-grid">
-                  <label><span class="field-label">MH HITH team</span><input class="text-input safety-input" data-safety-key="teamContact" value="Rockingham General Hospital switchboard — 9599 4000" /></label>
-                  <label><span class="field-label">GP or regular doctor</span><input class="text-input safety-input" data-safety-key="gpContact" placeholder="Name and phone" /></label>
-                  <label><span class="field-label">Other clinician or service</span><input class="text-input safety-input" data-safety-key="otherProfessional" placeholder="Name and phone" /></label>
-                  <label><span class="field-label">After-hours number given by my team</span><input class="text-input safety-input" data-safety-key="afterHours" placeholder="Add the number supplied at admission" /></label>
-                </div>
-              </div>
-
-              <div class="safety-panel" data-safety-panel="6">
-                <p class="step-count">Section 6 of 7</p>
-                <h3>Making my space safer</h3>
-                <p class="form-intro">Agree on practical steps with your clinician. Include who will help and when the plan should be reviewed.</p>
-                <label class="field-label" for="environment-steps">Things we have agreed to change or put in place</label>
-                <textarea class="textarea-input safety-input" id="environment-steps" data-safety-key="environment" rows="5" placeholder="For example: ask someone to stay, reduce access to something unsafe, move to a shared space..."></textarea>
-                <label class="field-label" for="shared-responsibility">Who will do what?</label>
-                <textarea class="textarea-input safety-input" id="shared-responsibility" data-safety-key="responsibility" rows="4" placeholder="My actions, my support person’s actions, and my team’s follow-up."></textarea>
-              </div>
-
-              <div class="safety-panel" data-safety-panel="7">
-                <p class="step-count">Section 7 of 7</p>
-                <h3>If I need urgent help</h3>
-                <p class="form-intro">Put the steps in the order you want to use them. In immediate danger, call 000 or go to the nearest emergency department.</p>
-                <div class="urgent-plan-list">
-                  <div><span>1</span><label>My first urgent step<input class="text-input safety-input" data-safety-key="urgentFirst" placeholder="Call someone, move to a safer place, contact my team..." /></label></div>
-                  <div><span>2</span><label>If that is not enough<input class="text-input safety-input" data-safety-key="urgentSecond" placeholder="Call MHERL, attend an emergency department..." /></label></div>
-                  <div><span>3</span><label>If there is immediate danger<input class="text-input" value="Call 000 or go to the nearest emergency department" readonly /></label></div>
-                </div>
-                <div class="crisis-contacts-inline">
-                  <a href="tel:000"><strong>000</strong><span>Emergency services</span></a>
-                  <a href="tel:1300555788"><strong>1300 555 788</strong><span>MHERL — Perth</span></a>
-                  <a href="tel:1800676822"><strong>1800 676 822</strong><span>MHERL — Peel</span></a>
-                </div>
-              </div>
-
-              <div class="safety-form-footer">
-                <button type="button" class="text-button" id="previous-safety">← Previous</button>
-                <span id="safety-saved-status">Saved on this device</span>
-                <button type="button" class="button button-primary" id="next-safety">Save and continue <span>→</span></button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="view" id="view-help" data-view-panel="help">
-          <div class="page-heading">
-            <div><p class="overline">Support options</p><h2>I need some help</h2><p>Choose what feels closest to what you need right now.</p></div>
-          </div>
-
-          <div class="help-choice-grid">
-            <article class="help-choice gentle">
-              <span class="help-number">01</span>
-              <h3>I could use some support</h3>
-              <p>I am not in immediate danger, but I would like to talk, use my plan or let my team know.</p>
-              <div class="help-actions-list">
-                <button data-view-link="safety"><b>Open my safety plan</b><span>See my own steps and contacts →</span></button>
-                <button data-view-link="message"><b>Send my team an update</b><span>For non-urgent messages →</span></button>
-                <a href="tel:1800595212"><b>Call Head to Health</b><span>1800 595 212 · service navigation</span></a>
-                <a href="tel:131114"><b>Call Lifeline</b><span>13 11 14 · 24 hours</span></a>
-                <a href="tel:1300224636"><b>Call Beyond Blue</b><span>1300 22 4636</span></a>
-                <a href="tel:1800022222"><b>Call healthdirect</b><span>1800 022 222 · health advice</span></a>
-              </div>
-            </article>
-
-            <article class="help-choice urgent">
-              <span class="help-number">02</span>
-              <h3>I don’t feel safe</h3>
-              <p>Use these options if you are in a mental health crisis, feel unable to keep yourself or someone else safe, or need urgent support.</p>
-              <div class="urgent-box"><strong>Immediate danger or emergency</strong><p>Call 000 or go to the nearest emergency department.</p><a class="button button-danger button-wide" href="tel:000">Call 000</a></div>
-              <div class="crisis-list">
-                <a href="tel:1300555788"><b>MHERL — Perth</b><span>1300 555 788 · 24-hour crisis support</span></a>
-                <a href="tel:1800676822"><b>MHERL — Peel</b><span>1800 676 822 · 24-hour crisis support</span></a>
-                <a href="tel:1800552002"><b>Rurallink</b><span>1800 552 002 · regional and remote WA</span></a>
-              </div>
-              <p class="source-note">MHERL can provide crisis assessment and support but is not an emergency service.</p>
-            </article>
-          </div>
-        </section>
-
-        <section class="view" id="view-message" data-view-panel="message">
-          <div class="page-heading">
-            <div><p class="overline">Non-urgent communication</p><h2>Update my team</h2><p>Send a practical update for the team to review. This demo does not send anything.</p></div>
-          </div>
-
-          <div class="two-column-layout message-layout">
-            <div class="main-column">
-              <form class="card message-form" id="message-form">
-                <div class="notice notice-amber"><strong>Not for urgent help</strong><span>Portal messages may not be read straight away. Use the help page or call 000 in an emergency.</span></div>
-                <label class="field-label" for="message-topic">What is this about?</label>
-                <select class="select-input" id="message-topic">
-                  <option value="Medication running low">Medication running low</option>
-                  <option value="Side effect or medication question">Side effect or medication question</option>
-                  <option value="Visit or appointment">Visit or appointment</option>
-                  <option value="How I am feeling">How I am feeling</option>
-                  <option value="Practical or social support">Practical or social support</option>
-                  <option value="Something else">Something else</option>
-                </select>
-
-                <div id="medication-fields" class="conditional-fields">
-                  <div class="field-grid two">
-                    <label><span class="field-label">Medication name</span><input class="text-input" id="medication-name" placeholder="Name on the label" /></label>
-                    <label><span class="field-label">How much is left?</span><input class="text-input" id="medication-left" placeholder="For example: 3 days" /></label>
-                  </div>
-                </div>
-
-                <label class="field-label" for="team-message">Your message</label>
-                <textarea class="textarea-input" id="team-message" rows="6" maxlength="1000" placeholder="For example: I have three tablets left and may run out before my next review."></textarea>
-                <div class="character-row"><span>Do not use this for an emergency.</span><span id="message-count-text">0 / 1000</span></div>
-
-                <section class="pharmacy-section">
-                  <div class="section-subheading"><div><p class="card-kicker">My local pharmacy</p><h3>Help the team contact my pharmacy</h3></div><span class="optional-tag">Optional</span></div>
-                  <div class="field-grid two">
-                    <label><span class="field-label">Pharmacy name</span><input class="text-input" id="pharmacy-name" placeholder="Start typing the pharmacy name" /></label>
-                    <label><span class="field-label">Suburb or postcode</span><input class="text-input" id="pharmacy-location" placeholder="For example: Rockingham 6168" /></label>
-                  </div>
-                  <button class="button button-secondary" type="button" id="find-pharmacy">Find contact details</button>
-                  <div class="pharmacy-result" id="pharmacy-result" hidden>
-                    <div><span class="result-dot">i</span><p><strong>Directory connection required for the pilot</strong><br /><span>For this local demo, add the verified details manually.</span></p></div>
-                    <div class="field-grid two">
-                      <label><span class="field-label">Phone</span><input class="text-input" id="pharmacy-phone" inputmode="tel" /></label>
-                      <label><span class="field-label">Email</span><input class="text-input" id="pharmacy-email" type="email" /></label>
-                    </div>
-                    <a class="external-link" href="https://www.healthdirect.gov.au/australian-health-services" target="_blank" rel="noreferrer">Open the Healthdirect service finder ↗</a>
-                  </div>
-                </section>
-
-                <button class="button button-primary" type="submit">Save demo update</button>
-                <p class="inline-status" id="message-status" aria-live="polite"></p>
-              </form>
-            </div>
-
-            <aside class="side-column">
-              <article class="card compact-card">
-                <p class="card-kicker">Recent updates</p>
-                <div id="recent-messages" class="recent-list"><p class="empty-small">No updates saved yet.</p></div>
-              </article>
-              <article class="info-panel"><strong>Medication concern?</strong><p>Do not stop or change a prescribed medicine unless your treating clinician advises you to.</p></article>
-            </aside>
-          </div>
-        </section>
-
-        <section class="view" id="view-progress" data-view-panel="progress">
-          <div class="page-heading">
-            <div><p class="overline">Recovery and wellbeing</p><h2>Track my progress</h2><p>Small steps and occasional check-ins can help you and your team notice what is changing.</p></div>
-            <button class="button button-secondary" id="add-goal-button">+ Add a goal</button>
-          </div>
-
-          <div class="progress-layout">
-            <section class="goals-section">
-              <div class="section-subheading"><div><p class="card-kicker">My goals</p><h3>Keep it small enough for today</h3></div><span class="status-pill">Patient-led</span></div>
-              <p class="section-explainer">A useful goal can be something like taking a shower, sitting outside for five minutes, texting one person, or preparing one meal.</p>
-              <div class="goal-list" id="goal-list"></div>
-            </section>
-
-            <section class="measures-section">
-              <div class="section-subheading"><div><p class="card-kicker">Optional check-ins</p><h3>Notice patterns over time</h3></div></div>
-              <div class="measure-notice"><span>i</span><p>These questionnaires support a conversation; they do not diagnose, predict safety or replace a clinical assessment. Results in this demo stay in your browser.</p></div>
-              <div class="measure-grid">
-                <button class="measure-card recommended" data-scale="k10">
-                  <span class="measure-tag">WA routine measure</span><b>K10+</b><strong>Psychological distress</strong><small>10 questions · about 2 minutes</small><i>Start →</i>
-                </button>
-                <button class="measure-card" data-scale="phq9">
-                  <span class="measure-tag">Clinician-enabled</span><b>PHQ-9</b><strong>Depression symptoms</strong><small>9 questions · about 2 minutes</small><i>Start →</i>
-                </button>
-                <button class="measure-card" data-scale="gad7">
-                  <span class="measure-tag">Clinician-enabled</span><b>GAD-7</b><strong>Anxiety symptoms</strong><small>7 questions · about 2 minutes</small><i>Start →</i>
-                </button>
-                <button class="measure-card" data-scale="who5">
-                  <span class="measure-tag">Wellbeing</span><b>WHO-5</b><strong>Positive wellbeing</strong><small>5 questions · about 1 minute</small><i>Start →</i>
-                </button>
-              </div>
-            </section>
-
-            <section class="card progress-chart-card">
-              <div class="section-subheading"><div><p class="card-kicker">My recent check-ins</p><h3>Change, not judgement</h3></div><select id="chart-scale" class="compact-select"><option value="mood">Daily check-in</option><option value="k10">K10+</option><option value="phq9">PHQ-9</option><option value="gad7">GAD-7</option><option value="who5">WHO-5</option></select></div>
-              <div class="chart-wrap"><svg id="progress-chart" viewBox="0 0 720 230" role="img" aria-label="Progress over time"></svg></div>
-              <p class="chart-caption" id="chart-caption">Demo values are shown until you add your own check-ins.</p>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="view-team-home" data-view-panel="team-home">
-          <div class="page-heading">
-            <div><p class="overline">Care team workspace</p><h2>Today’s overview</h2><p>Visit requests, patient updates and care-plan activity in one compact view.</p></div>
-            <span class="last-updated">Demo data · local browser</span>
-          </div>
-          <div class="metric-grid">
-            <article><span>Patients in program</span><strong>4</strong><small>2 home · 2 telehealth today</small></article>
-            <article><span>Visit requests</span><strong id="metric-requests">1</strong><small>Awaiting confirmation</small></article>
-            <article><span>Patient updates</span><strong id="metric-messages">0</strong><small>Non-urgent portal messages</small></article>
-            <article><span>Safety plans</span><strong id="metric-safety">43%</strong><small>Jordan’s completion</small></article>
-          </div>
-          <div class="team-dashboard-grid">
-            <article class="card span-2">
-              <div class="section-subheading"><div><p class="card-kicker">Today’s patients</p><h3>Visit board</h3></div><button class="text-button" data-view-link="team-patients">View all</button></div>
-              <div class="patient-table-wrap"><table class="patient-table"><thead><tr><th>Patient</th><th>Visit</th><th>Time</th><th>Latest check-in</th><th>Plan</th></tr></thead><tbody id="today-patient-table"></tbody></table></div>
-            </article>
-            <article class="card team-alert-card"><p class="card-kicker">Needs review</p><div id="team-alert-list" class="team-alert-list"></div></article>
-          </div>
-        </section>
-
-        <section class="view" id="view-team-patients" data-view-panel="team-patients">
-          <div class="page-heading"><div><p class="overline">Current program</p><h2>Patients</h2><p>Demonstration list for a short Mental Health Hospital in the Home admission.</p></div></div>
-          <div class="patient-cards" id="patient-cards"></div>
-        </section>
-
-        <section class="view" id="view-team-requests" data-view-panel="team-requests">
-          <div class="page-heading"><div><p class="overline">Scheduling</p><h2>Visit requests</h2><p>Review preferences before confirming changes with the patient.</p></div></div>
-          <article class="card"><div id="team-visit-requests" class="request-list"></div></article>
-        </section>
-
-        <section class="view" id="view-team-messages" data-view-panel="team-messages">
-          <div class="page-heading"><div><p class="overline">Patient updates</p><h2>Updates</h2><p>Non-urgent messages saved in the patient demo portal.</p></div></div>
-          <article class="card"><div id="team-message-list" class="request-list"></div></article>
-        </section>
-
-        <section class="view" id="view-team-progress" data-view-panel="team-progress">
-          <div class="page-heading"><div><p class="overline">Shared review</p><h2>Progress</h2><p>Patient-entered goals and self-report measures presented as conversation aids.</p></div></div>
-          <div class="two-column-layout">
-            <article class="card main-column"><div class="section-subheading"><div><p class="card-kicker">Jordan M.</p><h3>Check-in trend</h3></div><span class="status-pill">Active admission</span></div><div class="chart-wrap"><svg id="team-progress-chart" viewBox="0 0 720 230" role="img" aria-label="Patient check-in trend"></svg></div><div id="team-score-history" class="score-history"></div></article>
-            <aside class="side-column"><article class="card compact-card"><p class="card-kicker">Current goals</p><div id="team-goal-list" class="recent-list"></div></article><article class="info-panel"><strong>Use alongside clinical assessment</strong><p>Self-report measures should not be used alone to predict suicide, determine treatment or make discharge decisions.</p></article></aside>
-          </div>
-        </section>
-      </main>
-    </div>
-
-    <div class="modal-backdrop" id="unsafe-modal" hidden>
-      <section class="modal urgent-modal" role="dialog" aria-modal="true" aria-labelledby="unsafe-title">
-        <button class="modal-close" data-close-modal="unsafe-modal" aria-label="Close">×</button>
-        <p class="overline">Urgent support</p>
-        <h2 id="unsafe-title">You deserve support right now.</h2>
-        <p>If there is immediate danger, call <strong>000</strong> or go to the nearest emergency department. MHERL provides 24-hour mental health crisis support but is not an emergency service.</p>
-        <div class="modal-contact-grid">
-          <a class="emergency-contact" href="tel:000"><strong>000</strong><span>Emergency services</span></a>
-          <a href="tel:1300555788"><strong>1300 555 788</strong><span>MHERL — Perth</span></a>
-          <a href="tel:1800676822"><strong>1800 676 822</strong><span>MHERL — Peel</span></a>
-          <a href="tel:1800552002"><strong>1800 552 002</strong><span>Rurallink</span></a>
-        </div>
-        <button class="button button-secondary button-wide" data-close-modal="unsafe-modal">Return to my plan</button>
-      </section>
-    </div>
-
-    <div class="modal-backdrop" id="scale-modal" hidden>
-      <section class="modal scale-modal" role="dialog" aria-modal="true" aria-labelledby="scale-title">
-        <button class="modal-close" data-close-modal="scale-modal" aria-label="Close">×</button>
-        <div id="scale-content"></div>
-      </section>
-    </div>
-
-    <div class="modal-backdrop" id="goal-modal" hidden>
-      <section class="modal goal-modal" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title">
-        <button class="modal-close" data-close-modal="goal-modal" aria-label="Close">×</button>
-        <p class="overline">A small next step</p>
-        <h2 id="goal-modal-title">Add a goal</h2>
-        <p>Choose something small, specific and kind to yourself. You can change it at any time.</p>
-        <div class="goal-suggestions">
-          <button data-goal-suggestion="Spend 10 minutes outside">10 minutes outside</button>
-          <button data-goal-suggestion="Have a shower and put on clean clothes">A shower</button>
-          <button data-goal-suggestion="Text one person I trust">Text one person</button>
-          <button data-goal-suggestion="Prepare one simple meal">Prepare one meal</button>
-        </div>
-        <label class="field-label" for="new-goal-title">My goal</label>
-        <input class="text-input" id="new-goal-title" placeholder="What feels possible?" />
-        <label class="field-label" for="new-goal-why">Why this matters to me <span>(optional)</span></label>
-        <textarea class="textarea-input" id="new-goal-why" rows="3"></textarea>
-        <button class="button button-primary button-wide" id="save-goal">Add goal</button>
-      </section>
-    </div>
-
-    <template id="support-person-template">
-      <article class="support-person">
-        <div class="support-person-head"><strong>Support person</strong><button type="button" class="remove-support">Remove</button></div>
-        <div class="field-grid two">
-          <label><span class="field-label">Name</span><input class="text-input support-name" placeholder="Name" /></label>
-          <label><span class="field-label">Relationship</span><input class="text-input support-relationship" placeholder="Family, friend, carer..." /></label>
-          <label><span class="field-label">Phone</span><input class="text-input support-phone" inputmode="tel" placeholder="Phone number" /></label>
-          <label><span class="field-label">Email</span><input class="text-input support-email" type="email" placeholder="Email address" /></label>
-        </div>
-        <label class="checkbox-row small"><input type="checkbox" class="support-share" /><span><strong>Consider sharing my safety plan with this person</strong><small>My clinician will confirm consent with me first.</small></span></label>
-      </article>
-    </template>
-
-    <script src="app.js"></script>
-  </body>
+    p {
+      margin: 0;
+      color: #526a72;
+      font-size: 17px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">CQ</div>
+    <h1>CareQuay is temporarily offline</h1>
+    <p>This demonstration is not currently available. Please check back later.</p>
+  </main>
+</body>
 </html>
