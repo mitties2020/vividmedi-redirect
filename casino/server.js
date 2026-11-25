@@ -208,20 +208,6 @@ route("GET", "/api/wallet", async ({ req }) => {
   return { ...out, minWithdraw: MIN_WITHDRAW, deposits: deps.map((d) => ({ ...d, usd: usd(d.usd) })), withdrawals: wds.map((w) => ({ ...w, usd: usd(w.usd) })) };
 });
 
-route("POST", "/api/deposit/claim", async ({ req, body }) => {
-  const u = await requireUser(req);
-  if (S.limited(`claim:${u.id}`, 10, 3600e3)) throw new HttpError(429, "Too many deposit submissions. Try again later.");
-  const coin = S.COINS.find((c) => c.sym === body.coin);
-  if (!coin || !S.DEPOSIT_ADDRESSES[coin.sym]) throw new HttpError(400, "Deposits aren't open for that coin yet.");
-  const amount = Number(body.amount);
-  if (!(amount > 0) || amount > 1e12) throw new HttpError(400, "Enter the amount you sent.");
-  const txid = String(body.txid || "").trim();
-  if (!/^[A-Za-z0-9]{20,128}$/.test(txid.replace(/^0x/, ""))) throw new HttpError(400, "Paste the transaction ID (hash) from your wallet.");
-  const id = await store.claimDeposit(u.id, { coin: coin.sym, amount, txid });
-  if (!id) throw new HttpError(409, "That transaction has already been submitted.");
-  return { ok: true, id };
-});
-
 route("POST", "/api/withdraw", async ({ req, body }) => {
   const u = await requireUser(req);
   const coin = S.COINS.find((c) => c.sym === body.coin);

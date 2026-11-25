@@ -236,7 +236,6 @@ function memStore() {
     async history(userId, limit = 30) { return ledger.filter((l) => l.user_id === userId).slice(-limit).reverse(); },
     async cashbacks(userId) { return ledger.filter((l) => l.user_id === userId && l.type === "cashback").slice(-20).reverse(); },
     async claimDeposit(userId, { coin, amount, txid }) {
-      if (deposits.some((d) => d.coin === coin && d.txid && d.txid.toLowerCase() === txid.toLowerCase())) return null;
       const d = { id: ++did, user_id: userId, coin, amount, usd: 0, price: 0, txid, status: "pending", created_at: new Date() }; deposits.push(d); return d.id;
     },
     async allDeposits(status) { return deposits.filter((d) => !status || d.status === status).map((d) => ({ ...d, email: users.get(d.user_id).email })).reverse(); },

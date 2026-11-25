@@ -71,26 +71,46 @@ const DEPOSIT_ADDRESSES = Object.assign({
   TRX: "TKBwyP4kHsi2jEQyoMn3gPPXEfqxThmczg",
 }, (() => { try { return JSON.parse(process.env.DEPOSIT_ADDRESSES || "{}"); } catch { return {}; } })());
 let priceCache = { at: 0, data: null, pending: null };
+const getJson = async (url) => {
+  const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "CareQuayCasino/2.0" }, signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error(`${new URL(url).host} ${r.status}`);
+  return r.json();
+};
+const PRICE_SOURCES = [
+  async () => { // CoinGecko
+    const j = await getJson(`https://api.coingecko.com/api/v3/simple/price?ids=${COINS.map((c) => c.id).join(",")}&vs_currencies=usd&include_24hr_change=true`);
+    return Object.fromEntries(COINS.map((c) => [c.sym, { usd: j[c.id]?.usd, change24h: j[c.id]?.usd_24h_change }]));
+  },
+  async () => { // CryptoCompare
+    const j = await getJson(`https://min-api.cryptocompare.com/data/pricemultifull?fsyms=${COINS.map((c) => c.sym).join(",")}&tsyms=USD`);
+    return Object.fromEntries(COINS.map((c) => [c.sym, { usd: j.RAW?.[c.sym]?.USD?.PRICE, change24h: j.RAW?.[c.sym]?.USD?.CHANGEPCT24HOUR }]));
+  },
+  async () => { // Coinbase exchange rates (no 24h change)
+    const j = await getJson("https://api.coinbase.com/v2/exchange-rates?currency=USD");
+    return Object.fromEntries(COINS.map((c) => { const r = Number(j.data?.rates?.[c.sym]); return [c.sym, { usd: r > 0 ? 1 / r : undefined, change24h: null }]; }));
+  },
+];
 async function prices() {
-  if (priceCache.data && Date.now() - priceCache.at < 60_000) return priceCache.data;
+  if (priceCache.data && Date.now() - priceCache.at < 90_000) return priceCache.data;
   if (priceCache.pending) return priceCache.pending;
   priceCache.pending = (async () => {
-    try {
-      const ids = COINS.map((c) => c.id).join(",");
-      const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) });
-      if (!r.ok) throw new Error(`prices ${r.status}`);
-      const j = await r.json();
-      const data = COINS.map((c) => ({ sym: c.sym, name: c.name, nets: c.nets, address: DEPOSIT_ADDRESSES[c.sym] || null, usd: j[c.id]?.usd ?? null, change24h: j[c.id]?.usd_24h_change ?? null }));
-      if (data.some((d) => d.usd == null)) throw new Error("incomplete prices");
+    // Merge sources in order; a later source only fills coins an earlier one missed.
+    const merged = {}; const errs = [];
+    for (const src of PRICE_SOURCES) {
+      if (COINS.every((c) => merged[c.sym]?.usd > 0)) break;
+      try { const got = await src(); for (const [k, v] of Object.entries(got)) if (!(merged[k]?.usd > 0) && v.usd > 0) merged[k] = v; }
+      catch (e) { errs.push(e.message); }
+    }
+    priceCache.pending = null;
+    if (COINS.every((c) => merged[c.sym]?.usd > 0)) {
+      const data = COINS.map((c) => ({ sym: c.sym, name: c.name, nets: c.nets, address: DEPOSIT_ADDRESSES[c.sym] || null, usd: merged[c.sym].usd, change24h: merged[c.sym].change24h ?? null }));
       priceCache = { at: Date.now(), data, pending: null };
       return data;
-    } catch (e) {
-      console.error("price fetch failed:", e.message);
-      priceCache.pending = null;
-      if (priceCache.data) return priceCache.data;
-      if (process.env.PRICE_FALLBACK === "1") return COINS.map((c) => ({ sym: c.sym, name: c.name, nets: c.nets, address: DEPOSIT_ADDRESSES[c.sym] || null, usd: 100, change24h: 0, fallback: true }));
-      throw new Error("Live prices are unavailable right now. Try again in a minute.");
     }
+    console.error("price fetch failed:", errs.join(" | "));
+    if (priceCache.data) return priceCache.data;
+    if (process.env.PRICE_FALLBACK === "1") return COINS.map((c) => ({ sym: c.sym, name: c.name, nets: c.nets, address: DEPOSIT_ADDRESSES[c.sym] || null, usd: 100, change24h: 0, fallback: true }));
+    throw Object.assign(new Error("Live prices are unavailable right now. Try again in a minute."), { status: 503 });
   })();
   return priceCache.pending;
 }

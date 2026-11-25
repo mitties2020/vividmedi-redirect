@@ -67,7 +67,8 @@
       if (f.password.value !== f.password2.value) return setMsg(f, "Passwords don't match.");
       busy(f, true); setMsg(f, "");
       try {
-        await api("/api/auth/register", { email, password: f.password.value, password2: f.password2.value, terms: terms.checked });
+        const r = await api("/api/auth/register", { email, password: f.password.value, password2: f.password2.value, terms: terms.checked });
+        if (r.loggedIn) { history.replaceState(null, "", location.pathname + "#/"); location.reload(); return; }
         go("sent");
       } catch (err) { busy(f, false); setMsg(f, err.message); }
     });
