@@ -42,7 +42,7 @@
     const coins = ["BTC", "ETH", "LTC", "BNB", "TRX"].map((s) => CQPages.coinIcon(s));
     return el("section", { class: "hero" },
       el("div", { class: "hero-copy" },
-        el("p", { class: "hero-kicker" }, "CareQuay crypto casino"),
+        el("p", { class: "hero-kicker" }, el("span", { class: "kyc-badge big" }, "No KYC Casino"), "CareQuay crypto casino"),
         el("h1", {}, "Spin. Deal. Crash.", el("br"), el("span", {}, "Cash out in crypto.")),
         el("div", { class: "hero-cta" }, el("a", { class: "btn btn-gold", href: "#/wallet" }, "Deposit"), el("a", { class: "btn btn-ghost", href: "#/bonus" }, "20% weekly cashback")),
         el("div", { class: "accept" }, el("span", { class: "accept-label" }, "We accept"), coins)),
@@ -50,6 +50,15 @@
         el("div", { class: "hero-ring r1" }), el("div", { class: "hero-ring r2" }),
         el("div", { class: "hero-sym s1", html: CQSym.html("seven", "sym") }), el("div", { class: "hero-sym s2", html: CQSym.html("cherry", "sym") }), el("div", { class: "hero-sym s3", html: CQSym.html("sapphire", "sym") }),
         el("div", { class: "hero-logo", html: CQ.logo(84, "lgh") })));
+  }
+  function perks() {
+    const items = [
+      ["🛡️", "No KYC", "Sign up with just an email"],
+      ["💸", "20% cashback", "On weekly net losses, every Sunday"],
+      ["🎰", `${games.length} games`, "Slots, tables and crypto originals"],
+      ["🔒", "Secure RNG", "Results decided on our servers"],
+    ];
+    return el("section", { class: "perks" }, items.map(([i, t, s]) => el("div", { class: "perk" }, el("span", { class: "perk-icon", "aria-hidden": "true" }, i), el("div", {}, el("b", {}, t), el("small", {}, s)))));
   }
   async function recent() {
     const body = el("tbody", {}, el("tr", {}, el("td", { colspan: "5", class: "empty" }, "Loading…")));
@@ -71,7 +80,7 @@
       view().replaceChildren(el("section", { class: "lobby-section" }, el("div", { class: "section-head" }, el("div", { class: "section-title" }, el("span", { class: "section-icon" }, "🔎"), el("div", {}, el("h2", {}, `Results for “${q}”`), el("p", {}, `${hits.length} game${hits.length === 1 ? "" : "s"}`)))), hits.length ? el("div", { class: "tile-grid" }, hits.map(tile)) : el("p", { class: "muted" }, "No games match that search.")));
       return;
     }
-    view().replaceChildren(hero(), section("slots", byCat("slots")), section("tables", byCat("tables")), section("originals", byCat("originals")), await recent());
+    view().replaceChildren(hero(), perks(), section("slots", byCat("slots")), section("tables", byCat("tables")), section("originals", byCat("originals")), await recent());
   }
   function renderCategory(cat) {
     view().replaceChildren(el("nav", { class: "crumbs" }, el("a", { href: "#/" }, "Lobby"), el("span", {}, "›"), el("span", {}, CATS[cat].title)), section(cat, byCat(cat), { filters: cat === "slots" }));
@@ -178,6 +187,7 @@
     $("#auth").hidden = true; $("#app").hidden = false;
     $("#brand-mark").innerHTML = CQ.logo(34, "lgb");
     $("#user-email").textContent = me.email;
+    $("#foot-coins").replaceChildren(...["BTC", "ETH", "LTC", "BNB", "TRX"].map((c) => CQPages.coinIcon(c)));
     const nav = $("#nav");
     const link = (href, icon, label) => el("a", { class: "nav-link", href }, el("span", { class: "nav-icon" }, icon), el("span", {}, label));
     nav.replaceChildren(

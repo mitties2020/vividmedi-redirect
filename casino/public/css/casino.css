@@ -777,3 +777,28 @@ body[data-mode="real"] .topbar { box-shadow: inset 0 -2px 0 rgba(245, 196, 81, .
 .adm-amt { width: 150px; height: 36px !important; }
 .adm-tx { display: inline-block; max-width: 280px; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: .75rem; color: var(--dim); }
 .adm-act { display: flex; gap: 6px; align-items: center; }
+
+/* ---------- v3 polish: No KYC badge, perks strip, tile shine, footer coins ---------- */
+.kyc-badge { display: inline-flex; align-items: center; gap: 5px; width: max-content; margin-top: 6px; padding: 3px 8px 3px 7px; border: 1px solid rgba(94, 230, 210, .45); border-radius: 999px; background: linear-gradient(90deg, rgba(94, 230, 210, .18), rgba(245, 196, 81, .14)); color: #c8fff6; font-family: var(--mono); font-size: .56rem; font-style: normal; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; line-height: 1.2; box-shadow: 0 0 14px rgba(94, 230, 210, .18); }
+.kyc-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); animation: kyc-pulse 2s ease-in-out infinite; }
+.kyc-badge.big { margin: 0 12px 0 0; padding: 5px 12px 5px 10px; font-size: .66rem; vertical-align: middle; }
+.auth-brand .kyc-badge { margin-top: 8px; }
+.hero-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 0; }
+@keyframes kyc-pulse { 50% { opacity: .35; } }
+
+.perks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: -6px 0 30px; }
+.perk { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01)); transition: border-color .2s, transform .2s; }
+.perk:hover { border-color: rgba(94, 230, 210, .35); transform: translateY(-2px); }
+.perk-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; background: radial-gradient(circle at 35% 30%, rgba(94, 230, 210, .3), rgba(5, 25, 30, .8)); font-size: 1.15rem; }
+.perk b { display: block; color: var(--ink); font-size: .9rem; }
+.perk small { display: block; margin-top: 2px; color: var(--mute); font-size: .72rem; line-height: 1.3; }
+@media (max-width: 900px) { .perks { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .perk { padding: 11px 12px; } .perk-icon { width: 34px; height: 34px; } }
+
+.tile { isolation: isolate; }
+.tile::before { content: ""; position: absolute; inset: 0; z-index: 2; background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .22) 48%, transparent 60%); transform: translateX(-120%); transition: transform .7s ease; pointer-events: none; }
+.tile:hover::before { transform: translateX(120%); }
+
+.foot-coins { display: flex; gap: 6px; }
+.foot-coins .coin-ico { width: 28px; height: 28px; font-size: .5rem; }
+.foot-brand .kyc-badge { margin: 0; }
