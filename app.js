@@ -1,7 +1,9 @@
 (() => {
   "use strict";
 
-  const ACCESS_CODE = "931986";
+  // Only a SHA-256 hash of the access code is shipped, never the code itself.
+  const ACCESS_CODE_LENGTH = 8;
+  const ACCESS_CODE_HASH = "28684b1308aeee570de2473914bf4aaa94fdb9f42832dfeed24e5c820e3ade4b";
   const STORAGE_KEY = "carequay_demo_v1";
   const todayKey = () => new Intl.DateTimeFormat("en-CA", {
     timeZone: "Australia/Perth",
@@ -153,26 +155,104 @@
     if (!$(".modal-backdrop:not([hidden])")) document.body.classList.remove("modal-open");
   }
 
-  function handleLogin(event) {
+  let loginBusy = false;
+
+  async function sha256Hex(text) {
+    const bytes = new TextEncoder().encode(text);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  function renderCodeCells() {
+    const input = $("#access-code");
+    const box = $("#code-cells");
+    if (!input || !box) return;
+    const length = input.value.length;
+    $$(".lx-cell", box).forEach((cell, index) => {
+      cell.classList.toggle("is-filled", index < length);
+      cell.classList.toggle("is-active", index === Math.min(length, ACCESS_CODE_LENGTH - 1));
+    });
+    box.classList.toggle("is-complete", length === ACCESS_CODE_LENGTH);
+  }
+
+  function showLoginError(message) {
+    const card = $("#login-form");
+    $("#login-error").textContent = message;
+    card.classList.remove("is-error");
+    void card.offsetWidth;
+    card.classList.add("is-error");
+    $("#access-code").focus();
+  }
+
+  function bindCodeEntry() {
+    const input = $("#access-code");
+    const box = $("#code-cells");
+    input.addEventListener("input", () => {
+      const digits = input.value.replace(/\D/g, "").slice(0, ACCESS_CODE_LENGTH);
+      if (digits !== input.value) input.value = digits;
+      $("#login-form").classList.remove("is-error");
+      if (input.value.length < ACCESS_CODE_LENGTH) $("#login-error").textContent = "";
+      renderCodeCells();
+    });
+    input.addEventListener("focus", () => box.classList.add("is-focused"));
+    input.addEventListener("blur", () => box.classList.remove("is-focused"));
+    if (document.activeElement === input) box.classList.add("is-focused");
+    else if (!$("#login-screen").hidden) input.focus({ preventScroll: true });
+    input.addEventListener("keyup", renderCodeCells);
+    input.addEventListener("select", () => input.setSelectionRange(input.value.length, input.value.length));
+    $("#login-screen").addEventListener("pointerdown", (event) => {
+      if (!event.target.closest("input, button, a")) setTimeout(() => input.focus(), 0);
+    });
+    renderCodeCells();
+  }
+
+  async function handleLogin(event) {
     event.preventDefault();
-    const code = $("#access-code").value.trim();
-    const role = $("input[name='role']:checked").value;
-    const name = $("#display-name").value.trim();
-    if (code !== ACCESS_CODE) {
-      $("#login-error").textContent = "That access code was not recognised.";
-      $("#access-code").focus();
+    if (loginBusy) return;
+    const input = $("#access-code");
+    const code = input.value.replace(/\D/g, "");
+    if (code.length !== ACCESS_CODE_LENGTH) {
+      showLoginError(`Enter all ${ACCESS_CODE_LENGTH} digits, then press Enter.`);
+      return;
+    }
+    loginBusy = true;
+    let valid = false;
+    try {
+      valid = (await sha256Hex(code)) === ACCESS_CODE_HASH;
+    } catch {
+      loginBusy = false;
+      showLoginError("Secure check unavailable in this browser.");
+      return;
+    }
+    if (!valid) {
+      loginBusy = false;
+      input.value = "";
+      renderCodeCells();
+      showLoginError("Access code not recognised.");
       return;
     }
     $("#login-error").textContent = "";
+    const role = $("input[name='role']:checked")?.value || "patient";
+    const name = ($("#display-name")?.value || "").trim();
     currentRole = role;
     if (role === "patient" && name) {
       state.profile.patientName = name;
       saveState();
     }
-    $("#login-screen").hidden = true;
-    $("#app-shell").hidden = false;
-    configureRole(role, name);
-    renderAll();
+    input.blur();
+    const screen = $("#login-screen");
+    screen.classList.add("is-success");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setTimeout(() => {
+      screen.hidden = true;
+      screen.classList.remove("is-success");
+      input.value = "";
+      renderCodeCells();
+      $("#app-shell").hidden = false;
+      configureRole(role, name);
+      renderAll();
+      loginBusy = false;
+    }, reduceMotion ? 0 : 1000);
   }
 
   function configureRole(role, name) {
@@ -735,19 +815,14 @@
 
   function bindEvents() {
     $("#login-form").addEventListener("submit", handleLogin);
-    $("#show-code").addEventListener("click", () => {
-      const input = $("#access-code");
-      const show = input.type === "password";
-      input.type = show ? "text" : "password";
-      $("#show-code").textContent = show ? "Hide" : "Show";
-    });
-    $$('input[name="role"]').forEach((input) => input.addEventListener("change", () => {
-      $("#display-name").value = input.value === "team" ? "Dr Lee" : state.profile.patientName;
-    }));
+    bindCodeEntry();
     $("#sign-out").addEventListener("click", () => {
       $("#app-shell").hidden = true;
       $("#login-screen").hidden = false;
+      $("#login-form").classList.remove("is-error");
+      $("#login-error").textContent = "";
       $("#access-code").value = "";
+      renderCodeCells();
       $("#access-code").focus();
     });
     $("#mobile-menu").addEventListener("click", () => {

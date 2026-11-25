@@ -4,7 +4,7 @@ CareQuay is a local, front-end demonstration for a Western Australian Mental Hea
 
 ## Open the demo
 
-Open `index.html` in a modern browser. Use access code `931986` and select either **Patient** or **Care team**.
+Open `index.html` in a modern browser. Enter the 8-digit access code and press **Enter** to open the Patient view. Only a SHA-256 hash of the code is stored in `app.js`.
 
 ## Included in this prototype
 
