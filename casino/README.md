@@ -1,13 +1,33 @@
 # CareQuay Casino
 
-Play-money crypto-style casino. Static site — no build step, no backend.
+Node.js server (no framework) + static front end. Accounts with email confirmation and password reset,
+fun and real-money (USD) balances, all game results decided server-side, 20-coin wallet with live prices,
+withdrawal requests, 20% weekly cashback (Sunday 22:00 UTC).
 
-- **Crypto games:** Crash, Plinko, Limbo, Mines, Dice, Keno (~99% RTP; Keno ~97%)
-- **Slots:** 20 original machines — Classic 3×3, Book, Tumble (pays anywhere), 243/1024 Ways, 10/20 Lines — all with simulated RTP ≈ 96%
-- **Tables:** Blackjack (6 decks, S17, 3:2), European Roulette
+## Run
+    npm install
+    DATABASE_URL=postgres://... node server.js      # without DATABASE_URL an in-memory store is used (testing only)
 
-Balances are play coins stored in the browser (`localStorage`). No deposits, withdrawals or real-money wagering.
-Real-money operation would need a gambling licence, KYC/AML, a licensed payments/wallet provider and server-side game results;
-online casino services also can't be offered to people in Australia under the Interactive Gambling Act 2001.
+## Environment variables
+| Name | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres connection string |
+| `APP_URL` | Public URL used in email links, e.g. `https://carequay-casino-app.onrender.com` |
+| `NODE_ENV` | `production` (secure cookies, HSTS) |
+| `ADMIN_TOKEN` | Secret (16+ chars) for the admin API |
+| `RESEND_API_KEY` + `EMAIL_FROM` | Send emails through Resend, **or** |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Send through SMTP (e.g. Gmail app password: smtp.gmail.com, 465) |
+| `MIN_WITHDRAW_USD` | Minimum withdrawal (default 20) |
+| `DEPOSIT_ADDRESSES` | Reserved — deposit addresses are not wired up yet |
 
-Open `index.html` locally, or deploy the folder as a static site (Render: publish path `casino`).
+Without email settings, confirmation/reset links are written to the server log.
+
+## Admin API (header `x-admin-token: <ADMIN_TOKEN>`)
+- `POST /api/admin/deposit` `{ "email", "coin": "BTC", "amount": 0.01, "txid"?, "price"? }` — credit a confirmed deposit at the live USD rate (adds 1× wagering)
+- `POST /api/admin/confirm` `{ "email" }` — confirm an account manually
+- `GET /api/admin/withdrawals?status=pending` — list withdrawal requests
+- `POST /api/admin/withdrawals/:id` `{ "status": "paid", "txid" }` or `{ "status": "rejected" }` (rejected refunds the balance)
+
+## Before taking real deposits
+Insert operator, licence and restricted-jurisdiction details in the Terms (public/js/pages.js), connect deposit
+addresses and payout processing, and add KYC/AML checks as your licence requires.
