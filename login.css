@@ -10,8 +10,8 @@
   --lx-error: #ff6b6b;
   --lx-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
   position: relative;
-  min-height: calc(100vh - 30px);
-  min-height: calc(100dvh - 30px);
+  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   grid-template-columns: 1fr;
@@ -303,14 +303,8 @@
 .login-screen.is-success .lx-halo { animation-duration: .7s; }
 .login-screen.is-success .lx-card { animation: lx-exit .6s cubic-bezier(.6, 0, .4, 1) .35s forwards; }
 
-/* ---------- Demo banner while on this screen ---------- */
-body:has(#login-screen:not([hidden])) { background: var(--lx-bg, #031417); }
-body:has(#login-screen:not([hidden])) .demo-banner {
-  background: #031417;
-  border-bottom: 1px solid rgba(160, 240, 228, .1);
-  color: rgba(205, 238, 234, .5);
-}
-body:has(#login-screen:not([hidden])) .demo-banner span { background: rgba(214, 145, 59, .22); color: #f3c58a; }
+/* ---------- Page background while on this screen ---------- */
+body:has(#login-screen:not([hidden])) { background: #031417; }
 
 /* ---------- Keyframes ---------- */
 @keyframes lx-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }

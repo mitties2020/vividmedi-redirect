@@ -134,7 +134,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .text-button { padding: 0; border: 0; background: transparent; color: var(--teal); font-size: .73rem; font-weight: 750; cursor: pointer; }
 .text-button:hover { text-decoration: underline; }
 
-.app-shell { min-height: calc(100vh - 30px); display: grid; grid-template: 74px 1fr / 238px 1fr; }
+.app-shell { min-height: 100vh; display: grid; grid-template: 74px 1fr / 238px 1fr; }
 .app-header { grid-column: 1 / -1; position: sticky; top: 0; z-index: 40; height: 74px; padding: 0 23px; border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, .96); display: flex; align-items: center; gap: 22px; }
 .app-header .brand { min-width: 195px; }
 .app-header .brand-mark { width: 31px; height: 31px; }
