@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a1418" />
+    <title>CareQuay Casino</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M23.5 5a19 19 0 1 0 12.8 33' fill='none' stroke='%235ee6d2' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='m28 28 11 11' fill='none' stroke='%23f5c451' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="css/casino.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#/" aria-label="CareQuay Casino home">
+          <span id="brand-mark"></span>
+          <span class="brand-text"><b>CareQuay</b><small>Casino</small></span>
+        </a>
+        <a class="btn btn-primary btn-block" href="#/originals">Play now</a>
+        <nav id="nav" class="nav" aria-label="Games"></nav>
+        <div class="sidebar-foot">
+          <span class="age">18+</span>
+          <p>Play coins only. No real money is wagered or paid out.</p>
+        </div>
+      </aside>
+      <div class="scrim" id="scrim"></div>
+
+      <div class="main">
+        <header class="topbar">
+          <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Open menu">☰</button>
+          <label class="search">
+            <span aria-hidden="true">⌕</span>
+            <input id="search" type="search" placeholder="Search games" autocomplete="off" aria-label="Search games" />
+          </label>
+          <div class="wallet">
+            <button class="wallet-pill" id="wallet-pill" type="button" aria-label="Change coin">
+              <span class="wallet-coin" id="wallet-coin"></span>
+              <span class="wallet-balance" id="wallet-balance"></span>
+              <span class="wallet-code" id="wallet-code"></span>
+              <span class="caret" aria-hidden="true">▾</span>
+            </button>
+            <button class="btn btn-primary wallet-btn" id="wallet-btn" type="button">Wallet</button>
+          </div>
+        </header>
+
+        <main id="view" class="view"></main>
+
+        <footer class="site-foot">
+          <div class="foot-brand"><b>CareQuay Casino</b><span>© 2026</span></div>
+          <p>Play-money entertainment for adults 18+. Coins have no cash value and can't be bought, sold or withdrawn. If gambling stops being fun, visit <a href="https://www.gamblinghelponline.org.au" target="_blank" rel="noopener">Gambling Help Online</a>.</p>
+        </footer>
+      </div>
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/games/originals.js"></script>
+    <script src="js/games/slots.js"></script>
+    <script src="js/games/tables.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
