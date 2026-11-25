@@ -56,11 +56,11 @@ function emailLayout(title, body, cta, link) {
 
 /* ---------- Live prices (CoinGecko, cached) ---------- */
 const COINS = [
-  { sym: "BTC", name: "Bitcoin", id: "bitcoin", nets: ["Bitcoin"] },
-  { sym: "ETH", name: "Ethereum", id: "ethereum", nets: ["Ethereum (ERC-20)"] },
-  { sym: "LTC", name: "Litecoin", id: "litecoin", nets: ["Litecoin"] },
-  { sym: "BNB", name: "BNB", id: "binancecoin", nets: ["BNB Smart Chain (BEP-20)"] },
-  { sym: "TRX", name: "TRON", id: "tron", nets: ["Tron (TRC-20)"] },
+  { sym: "BTC", name: "Bitcoin", id: "bitcoin", pp: "btc-bitcoin", nets: ["Bitcoin"] },
+  { sym: "ETH", name: "Ethereum", id: "ethereum", pp: "eth-ethereum", nets: ["Ethereum (ERC-20)"] },
+  { sym: "LTC", name: "Litecoin", id: "litecoin", pp: "ltc-litecoin", nets: ["Litecoin"] },
+  { sym: "BNB", name: "BNB", id: "binancecoin", pp: "bnb-binance-coin", nets: ["BNB Smart Chain (BEP-20)"] },
+  { sym: "TRX", name: "TRON", id: "tron", pp: "trx-tron", nets: ["Tron (TRC-20)"] },
 ];
 /* Deposit addresses (public). Override with DEPOSIT_ADDRESSES='{"BTC":"bc1..."}' if they change. */
 const DEPOSIT_ADDRESSES = Object.assign({
@@ -77,21 +77,29 @@ const getJson = async (url) => {
   return r.json();
 };
 const PRICE_SOURCES = [
+  async () => { // Coinpaprika (free, no key)
+    const out = {};
+    await Promise.all(COINS.map(async (c) => {
+      try { const j = await getJson(`https://api.coinpaprika.com/v1/tickers/${c.pp}?quotes=USD`); out[c.sym] = { usd: j.quotes?.USD?.price, change24h: j.quotes?.USD?.percent_change_24h }; } catch { /* other sources fill gaps */ }
+    }));
+    if (!Object.keys(out).length) throw new Error("coinpaprika unavailable");
+    return out;
+  },
   async () => { // CoinGecko
     const j = await getJson(`https://api.coingecko.com/api/v3/simple/price?ids=${COINS.map((c) => c.id).join(",")}&vs_currencies=usd&include_24hr_change=true`);
     return Object.fromEntries(COINS.map((c) => [c.sym, { usd: j[c.id]?.usd, change24h: j[c.id]?.usd_24h_change }]));
-  },
-  async () => { // CryptoCompare
-    const j = await getJson(`https://min-api.cryptocompare.com/data/pricemultifull?fsyms=${COINS.map((c) => c.sym).join(",")}&tsyms=USD`);
-    return Object.fromEntries(COINS.map((c) => [c.sym, { usd: j.RAW?.[c.sym]?.USD?.PRICE, change24h: j.RAW?.[c.sym]?.USD?.CHANGEPCT24HOUR }]));
   },
   async () => { // Coinbase exchange rates (no 24h change)
     const j = await getJson("https://api.coinbase.com/v2/exchange-rates?currency=USD");
     return Object.fromEntries(COINS.map((c) => { const r = Number(j.data?.rates?.[c.sym]); return [c.sym, { usd: r > 0 ? 1 / r : undefined, change24h: null }]; }));
   },
+  async () => { // KuCoin fiat prices (no 24h change)
+    const j = await getJson(`https://api.kucoin.com/api/v1/prices?base=USD&currencies=${COINS.map((c) => c.sym).join(",")}`);
+    return Object.fromEntries(COINS.map((c) => [c.sym, { usd: Number(j.data?.[c.sym]) || undefined, change24h: null }]));
+  },
 ];
 async function prices() {
-  if (priceCache.data && Date.now() - priceCache.at < 90_000) return priceCache.data;
+  if (priceCache.data && Date.now() - priceCache.at < 120_000) return priceCache.data;
   if (priceCache.pending) return priceCache.pending;
   priceCache.pending = (async () => {
     // Merge sources in order; a later source only fills coins an earlier one missed.
