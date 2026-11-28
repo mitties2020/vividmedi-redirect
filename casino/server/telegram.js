@@ -192,6 +192,29 @@ module.exports = function createTelegram({ store, SP }) {
     return null;
   }
 
+  /* ---------------- Live support: site chat <-> owner's Telegram ---------------- */
+  let onSupportReply = null;
+  const setSupportHandler = (fn) => { onSupportReply = fn; };
+  async function supportForward(conv, header, text) {
+    if (!on()) return false;
+    const list = await admins();
+    let delivered = false;
+    for (const chat of list) {
+      const r = await send(chat, `💬 <b>Support</b> · ${header}\n\n${esc(text)}\n\n<i>↩️ Reply to this message to answer.</i>`);
+      if (r && r.message_id) { delivered = true; await store.kvSet(`sup:tg:${chat}:${r.message_id}`, conv); }
+    }
+    return delivered;
+  }
+  async function supportReplyFromOwner(m) {
+    const conv = await store.kvGet(`sup:tg:${m.chat.id}:${m.reply_to_message.message_id}`);
+    if (!conv) return false;
+    if (typeof m.text !== "string" || !m.text.trim()) { await send(m.chat.id, "Only text replies can be sent to players."); return true; }
+    if (!onSupportReply) return false;
+    const ok = await onSupportReply(conv, m.text.trim().slice(0, 2000));
+    await call("sendMessage", { chat_id: m.chat.id, text: ok ? "✅ Sent" : "⚠️ Couldn't deliver that reply.", reply_to_message_id: m.message_id }).catch(() => {});
+    return true;
+  }
+
   /* ---------------- Helper bot (direct messages) ---------------- */
   const startText = () => `👋 <b>Welcome to CareQuay</b> — no-KYC crypto casino & pre-match sportsbook.\n\n• 50% first-deposit bonus (up to $100 on $75+)\n• 20% cashback on weekly losses\n• Withdrawals usually in under 10 minutes\n• BTC, ETH, LTC, BNB and TRON\n\nCommands:\n/odds — today's top matches\n/cashback — weekly cashback\n/invite — your invite link (earn 10%)\n/balance — your balances\n/deposit — how to deposit\n/share — a card to share with friends\n\nSupport: support@carequay.com\n\nTo get bet and withdrawal alerts here, open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b>.${FOOTER}`;
   const linkHint = () => `🔗 First connect your account: log in at ${SITE()}, open <b>Invite friends</b> and tap <b>Connect Telegram</b>.`;
@@ -209,6 +232,7 @@ module.exports = function createTelegram({ store, SP }) {
 
   async function onMessage(m) {
     const chat = m.chat && m.chat.id;
+    if (chat && m.chat.type === "private" && m.reply_to_message && (await admins()).includes(chat) && (await supportReplyFromOwner(m))) return;
     if (!chat || m.chat.type !== "private" || typeof m.text !== "string") return;
     const [cmdRaw, ...args] = m.text.trim().split(/\s+/);
     const cmd = cmdRaw.toLowerCase().replace(/@.*$/, "");
@@ -292,5 +316,5 @@ module.exports = function createTelegram({ store, SP }) {
     return `https://t.me/${botName}?start=link_${raw}`;
   }
 
-  return { init, tick, bigWin, notify, webhook, linkUrl, adminLink, alertAdmin, enabled: on, botName: () => botName, channel: CHANNEL, money, esc };
+  return { init, tick, bigWin, notify, webhook, supportForward, setSupportHandler, linkUrl, adminLink, alertAdmin, enabled: on, botName: () => botName, channel: CHANNEL, money, esc };
 };

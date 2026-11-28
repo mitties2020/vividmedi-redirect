@@ -209,6 +209,51 @@ route("GET", "/api/me", async ({ req }) => {
   return store.tx(u.id, async (acct, ops) => { await settleCashback(acct, ops); return { email: u.email, ...balances(acct), emailConfigured: S.emailConfigured() }; });
 });
 
+/* ---------- Live support chat (site widget <-> owner's Telegram) ---------- */
+const SUP_CONV = /^g:[A-Za-z0-9_-]{20,48}$/;
+async function supportConv(req, body) {
+  const u = await currentUser(req);
+  if (u) return { conv: `u:${u.id}`, user: u };
+  const c = String((body && body.conv) || "");
+  return { conv: SUP_CONV.test(c) ? c : null, user: null };
+}
+const supOut = (rows) => rows.map((m) => ({ id: m.id, from: m.sender, text: m.body, at: m.at }));
+route("POST", "/api/support/send", async ({ req, body }) => {
+  const text = String(body.text || "").replace(/\s+$/g, "").trim().slice(0, 1000);
+  if (!text) throw new HttpError(400, "Type a message first.");
+  let { conv, user } = await supportConv(req, body);
+  if (!conv) conv = "g:" + S.newToken().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32);
+  if (S.limited(`sup:${conv}`, 15, 600e3) || S.limited(`supip:${ipOf(req)}`, 40, 600e3)) throw new HttpError(429, "You're sending messages too quickly — please wait a minute.");
+  const first = !(await store.support.list(conv, 0)).length;
+  await store.support.add(conv, user && user.id, "user", text);
+  const page = String(body.page || "").slice(0, 80).replace(/[^\w\/#?=&.-]/g, "");
+  let header;
+  if (user) {
+    const deps = (await store.deposits(user.id)).filter((d) => d.status === "credited" || d.status === "unconfirmed");
+    header = `${TG.esc(user.email)}\n💰 Real ${TG.money(usdx(user.real_balance))} · wager left ${TG.money(usd(user.wager_remaining))} · ${deps.length} deposit${deps.length === 1 ? "" : "s"}`;
+  } else {
+    const email = String(body.email || "").trim().slice(0, 120);
+    header = `Guest${email ? ` · ${TG.esc(email)}` : " (not logged in)"}`;
+  }
+  if (page) header += `\n📄 ${TG.esc(page)}`;
+  const delivered = await TG.supportForward(conv, header, text).catch(() => false);
+  if (first) await store.support.add(conv, null, "bot", delivered
+    ? "Thanks — your message is with our team. We usually reply within a few minutes. Keep this window open, or come back later: your conversation will be here."
+    : "Thanks — we've got your message and will reply here as soon as we can. You can also email support@carequay.com.");
+  return { ok: true, conv, messages: supOut(await store.support.list(conv, Number(body.after) || 0)) };
+});
+route("POST", "/api/support/poll", async ({ req, body }) => {
+  const { conv } = await supportConv(req, body);
+  if (!conv) return { conv: null, messages: [] };
+  return { conv, messages: supOut(await store.support.list(conv, Number(body.after) || 0)) };
+});
+TG.setSupportHandler(async (conv, text) => {
+  const uid = conv.startsWith("u:") ? Number(conv.slice(2)) : null;
+  await store.support.add(conv, null, "agent", text);
+  if (uid) TG.notify(uid, `💬 <b>CareQuay Support</b>\n\n${TG.esc(text)}\n\n<i>Reply in the chat on the site.</i>`).catch(() => {});
+  return true;
+});
+
 route("POST", "/api/fun", async ({ req }) => {
   const u = await requireUser(req);
   return store.tx(u.id, async (acct, ops) => {

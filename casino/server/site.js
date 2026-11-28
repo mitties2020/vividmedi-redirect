@@ -115,6 +115,7 @@ ${body}
 <div><h3>Deposits</h3>${Object.entries(COIN_SLUG).map(([slug, sym]) => `<a href="/deposit/${slug}">Deposit ${S.COINS.find((c) => c.sym === sym).name}</a>`).join("")}</div>
 <div><h3>Help</h3>${tgUrl ? `<a href="${tgUrl}" target="_blank" rel="noopener">Telegram channel</a><a href="https://t.me/CareQuayCasinoBot" target="_blank" rel="noopener">Telegram bot</a>` : ""}<a href="mailto:support@carequay.com">support@carequay.com</a><a href="/bonus/first-deposit">First-deposit bonus</a><a href="/bonus/cashback">20% cashback</a><a href="/invite">Refer a friend</a><a href="/faq">FAQ</a><a href="/terms">Terms &amp; Conditions</a><a href="/responsible-gambling">Responsible gambling</a></div>
 </div><div class="s-wrap s-legal"><span class="age">18+</span><p>Gambling can be addictive — please play responsibly. Only play where online gambling is legal. Need help? <a href="https://www.gamblinghelponline.org.au" rel="noopener" target="_blank">Gambling Help Online</a> · <a href="https://www.gamcare.org.uk" rel="noopener" target="_blank">GamCare</a></p><p>© ${new Date().getUTCFullYear()} CareQuay Casino</p></div></footer>
+<script src="/js/support.js" defer></script>
 </body></html>`;
   }
 

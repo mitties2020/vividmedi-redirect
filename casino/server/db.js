@@ -119,6 +119,15 @@ CREATE TABLE IF NOT EXISTS visits (
 );
 CREATE INDEX IF NOT EXISTS visits_at ON visits (at);
 CREATE INDEX IF NOT EXISTS visits_visitor ON visits (visitor, at);
+CREATE TABLE IF NOT EXISTS support_messages (
+  id BIGSERIAL PRIMARY KEY,
+  conv TEXT NOT NULL,
+  user_id BIGINT,
+  sender TEXT NOT NULL,
+  body TEXT NOT NULL,
+  at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS support_conv ON support_messages (conv, id);
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
@@ -274,6 +283,10 @@ function pgStore(url) {
         return { invited, earned, recent };
       },
     },
+    support: {
+      async add(conv, userId, sender, body) { const r = await q("INSERT INTO support_messages (conv, user_id, sender, body) VALUES ($1,$2,$3,$4) RETURNING id, at", [conv, userId || null, sender, body]); return { id: num(r.rows[0].id), at: r.rows[0].at }; },
+      async list(conv, after = 0) { return (await q("SELECT id, sender, body, at FROM (SELECT id, sender, body, at FROM support_messages WHERE conv = $1 AND id > $2 ORDER BY id DESC LIMIT 100) t ORDER BY id", [conv, after || 0])).rows.map((x) => ({ ...x, id: num(x.id) })); },
+    },
     visits: {
       async add(v) { await q("INSERT INTO visits (visitor, path, ref) VALUES ($1, $2, $3)", [v.visitor, v.path, v.ref || null]); },
       async seen(visitor, since) { return (await q("SELECT 1 FROM visits WHERE visitor = $1 AND at >= $2 LIMIT 1", [visitor, since])).rowCount > 0; },
@@ -297,7 +310,7 @@ function pgStore(url) {
 /* ---------------- In-memory (local testing) ---------------- */
 function memStore() {
   const users = new Map(), byEmail = new Map(), tokens = new Map(), sessions = new Map();
-  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [], sbets = [], kv = new Map(), rrewards = new Map(), visits = [];
+  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [], sbets = [], kv = new Map(), rrewards = new Map(), visits = [], support = []; let supId = 0;
   let uid = 0, lid = 0, did = 0, wid = 0, sid = 0;
   const locks = new Map();
   const lock = (id) => { const prev = locks.get(id) || Promise.resolve(); let release; const next = new Promise((r) => (release = r)); locks.set(id, prev.then(() => next)); return prev.then(() => release); };
@@ -403,6 +416,10 @@ function memStore() {
         const byWeek = new Map(); for (const r of rs) { const k = r.week_start.toISOString(); const e = byWeek.get(k) || { week_start: r.week_start, amount: 0, players: 0 }; e.amount += r.amount; e.players++; byWeek.set(k, e); }
         return { invited: [...users.values()].filter((u) => u.referred_by === referrerId).length, earned: rs.reduce((s, r) => s + r.amount, 0), recent: [...byWeek.values()].sort((a, b) => b.week_start - a.week_start).slice(0, 12) };
       },
+    },
+    support: {
+      async add(conv, userId, sender, body) { const m = { id: ++supId, conv, user_id: userId || null, sender, body, at: new Date() }; support.push(m); return { id: m.id, at: m.at }; },
+      async list(conv, after = 0) { return support.filter((m) => m.conv === conv && m.id > (after || 0)).slice(-100).map(({ id, sender, body, at }) => ({ id, sender, body, at })); },
     },
     visits: {
       async add(v) { visits.push({ ...v, at: new Date() }); },
