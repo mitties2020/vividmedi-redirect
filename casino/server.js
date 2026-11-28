@@ -8,6 +8,7 @@ const S = require("./server/support");
 const G = require("./server/games");
 const T = require("./public/js/shared/tables.js");
 const createSports = require("./server/sports");
+const createSite = require("./server/site");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC = path.join(__dirname, "public");
@@ -20,6 +21,7 @@ const PROD = process.env.NODE_ENV === "production";
 const REQUIRE_CONFIRM = process.env.REQUIRE_EMAIL_CONFIRM === "1"; // off: accounts work straight after sign-up
 const store = createStore();
 const SP = createSports(store);
+let SITE = null; // created once currentUser is defined
 
 const usd = (micro) => Math.floor(micro / 10000) / 100; // micro → dollars (cents precision, floored)
 const usdx = (micro) => micro / MICRO;                    // exact
@@ -80,6 +82,7 @@ async function currentUser(req) {
   const uid = await store.sessions.get(S.sha(tok));
   return uid ? store.users.byId(uid) : null;
 }
+SITE = createSite({ store, SP, currentUser: (req) => currentUser(req) });
 async function requireUser(req) {
   const u = await currentUser(req);
   if (!u) throw new HttpError(401, "Please log in.");
@@ -117,7 +120,11 @@ route("POST", "/api/auth/register", async ({ req, res, body }) => {
   const pp = S.passwordProblem(body.password); if (pp) throw new HttpError(400, pp);
   if (body.password !== body.password2) throw new HttpError(400, "Passwords don't match.");
   if (!body.terms) throw new HttpError(400, "Please confirm you're 18 or over and accept the Terms & Conditions.");
-  const user = await store.users.create({ email, passHash: await S.hashPassword(body.password) });
+  let referredBy = null;
+  const refCode = cookies(req).cq_ref;
+  if (refCode && /^[a-z0-9]{4,16}$/i.test(refCode)) { const ref = await store.users.byRefCode(refCode); if (ref && ref.email !== email) referredBy = ref.id; }
+  const user = await store.users.create({ email, passHash: await S.hashPassword(body.password), referredBy });
+  if (user && referredBy) res.setHeader("Set-Cookie", `cq_ref=; Path=/; Max-Age=0; SameSite=Lax${PROD ? "; Secure" : ""}`);
   if (!REQUIRE_CONFIRM) {
     if (!user) throw new HttpError(409, "An account with that email already exists. Log in instead.");
     await store.users.setConfirmed(user.id);
@@ -475,10 +482,49 @@ route("POST", "/api/admin/sports/settle", async ({ req, body }) => {
 });
 setInterval(maybeAutoSettle, 20 * 60e3).unref();
 
+/* ---------- Referrals: 10% of referred players' weekly net real-money losses ---------- */
+const REFERRAL_RATE = Number(process.env.REFERRAL_RATE || 0.1);
+const REF_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+async function ensureRefCode(u) {
+  if (u.ref_code) return u.ref_code;
+  for (let i = 0; i < 8; i++) {
+    const code = Array.from(require("crypto").randomBytes(7), (b) => REF_ALPHABET[b % REF_ALPHABET.length]).join("");
+    if (await store.users.setRefCode(u.id, code)) return code;
+    const fresh = await store.users.byId(u.id); if (fresh.ref_code) return fresh.ref_code;
+  }
+  throw new HttpError(500, "Couldn't create an invite code.");
+}
+async function settleReferrals() {
+  const last = S.lastBoundary(new Date());
+  for (let w = 4; w >= 1; w--) {
+    const to = new Date(last.getTime() - (w - 1) * S.WEEK), from = new Date(to.getTime() - S.WEEK);
+    for (const r of await store.referrals.weekNet(from, to)) {
+      const amount = Math.floor(r.net * REFERRAL_RATE / 10000) * 10000;
+      if (amount <= 0) continue;
+      await store.tx(r.referrer_id, async (acct, ops) => {
+        if (!(await ops.referralReward({ user_id: r.user_id, week_start: from, net: r.net, amount }))) return;
+        acct.real_balance += amount;
+        await ops.ledger({ mode: "real", type: "referral", amount, meta: { from: from.toISOString(), to: to.toISOString() } });
+      });
+    }
+  }
+}
+let lastRef = 0;
+const maybeSettleReferrals = () => { if (Date.now() - lastRef < 10 * 60e3) return; lastRef = Date.now(); settleReferrals().catch((e) => console.error("referrals:", e.message)); };
+setInterval(maybeSettleReferrals, 60 * 60e3).unref();
+route("GET", "/api/referral", async ({ req }) => {
+  const u = await requireUser(req);
+  maybeSettleReferrals();
+  const code = await ensureRefCode(u);
+  const st = await store.referrals.stats(u.id);
+  const base = (process.env.SITE_URL || `${(req.headers["x-forwarded-proto"] || "http").split(",")[0]}://${req.headers.host}`).replace(/\/$/, "");
+  return { code, link: `${base}/r/${code}`, rate: REFERRAL_RATE, invited: st.invited, earned: usdx(st.earned), weeks: st.recent.map((x) => ({ week: x.week_start, amount: usdx(x.amount), players: x.players })), nextPayout: S.nextBoundary(new Date()).toISOString() };
+});
+
 route("GET", "/api/health", async () => ({ ok: true, store: store.kind, email: S.emailConfigured() }));
 
 /* ---------- Static files ---------- */
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".webmanifest": "application/manifest+json" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".txt": "text/plain; charset=utf-8", ".xml": "application/xml", ".ico": "image/x-icon", ".json": "application/json", ".webmanifest": "application/manifest+json" };
 function serveStatic(req, res, pathname) {
   let rel = decodeURIComponent(pathname);
   if (rel === "/" || !path.extname(rel)) rel = "/index.html";
@@ -505,6 +551,17 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   if (!url.pathname.startsWith("/api/")) {
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
+    try {
+      const p = url.pathname.replace(/\/+$/, "") || "/";
+      const ref = p.match(/^\/r\/([a-z0-9]{4,16})$/i);
+      if (ref) { res.writeHead(302, { Location: "/signup", "Set-Cookie": `cq_ref=${ref[1].toLowerCase()}; Path=/; Max-Age=${30 * 86400}; SameSite=Lax${PROD ? "; Secure" : ""}`, "Cache-Control": "no-store" }); return res.end(); }
+      if (p === "/login" || p === "/signup" || p === "/app") return serveStatic(req, res, "/index.html");
+      if (p === "/") {
+        const q = url.searchParams;
+        if (q.has("reset") || q.has("confirmed") || (await currentUser(req).catch(() => null))) return serveStatic(req, res, "/index.html");
+      }
+      if (await SITE.handle(req, res, url)) return;
+    } catch (e) { console.error(e); return send(res, 500, "Something went wrong."); }
     return serveStatic(req, res, url.pathname);
   }
   try {
@@ -525,4 +582,4 @@ const server = http.createServer(async (req, res) => {
 store.init().then(() => server.listen(PORT, () => console.log(`CareQuay Casino on :${PORT} (store: ${store.kind}, email: ${S.emailConfigured() ? "on" : "log only"})`)))
   .catch((e) => { console.error("Startup failed:", e); process.exit(1); });
 
-module.exports = { server, store };
+module.exports = { server, store, settleReferrals };

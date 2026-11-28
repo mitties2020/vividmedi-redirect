@@ -161,24 +161,10 @@
   }
 
   /* ================= TERMS ================= */
-  const TERMS = [
-    ["1. About these terms", "These Terms & Conditions govern your use of CareQuay Casino (the “Site”), including all games, the fun-play mode, deposits, withdrawals and promotions. By creating an account or using the Site you agree to these terms. Please read them carefully."],
-    ["2. Eligibility", "You must be at least 18 years old, or the legal gambling age where you live if that is higher. You may only play for real money if online gambling is legal in your jurisdiction, and you are responsible for checking this. Accounts opened by minors or from restricted jurisdictions will be closed and any real-money balance may be voided. [Operator to insert list of restricted jurisdictions.]"],
-    ["3. Your account", "You may hold one account only. Keep your password secure and don't share your account. You must use a valid email address that you control. CareQuay is a no-KYC casino: we do not ask for identity documents to open an account, deposit or withdraw."],
-    ["4. Deposits", "Deposits are accepted in Bitcoin (BTC), Ethereum (ETH), Litecoin (LTC), BNB (BNB Smart Chain) and TRON (TRX). Deposits are credited to your balance in US dollars at the live market rate once the transaction has been received. Only send the coin and network displayed for the deposit address; funds sent using a different coin or network may be lost. Every deposit must be wagered at least once (1×) on real-money games before the deposited amount can be withdrawn."],
-    ["5. Withdrawals", "You can request a withdrawal to your own wallet address in any supported cryptocurrency once all deposits have been wagered at least 1×. The US-dollar amount is converted to cryptocurrency at the live rate when you submit the request. Withdrawals are usually processed in under 10 minutes; occasionally they may take longer, for example during network congestion or when extra security review is needed. The minimum withdrawal is $20. You are responsible for entering the correct address and network — transactions sent to an address you provide cannot be reversed. We may delay or decline a withdrawal where these terms have been breached or we reasonably suspect fraud or abuse."],
-    ["6. Weekly cashback", "Players receive 20% cashback on net real-money losses for each cashback week. A cashback week runs from Sunday 22:00 UTC to the following Sunday 22:00 UTC. Net loss is real-money bets minus real-money winnings in that week; fun-mode play, deposits and withdrawals are excluded. Cashback is credited automatically to your real balance at Sunday 22:00 UTC (it is applied the next time your account is accessed) and carries no wagering requirement. We may withhold cashback where we reasonably suspect bonus abuse, collusion or multiple accounts."],
-    ["7. Fun mode", "Fun mode uses a practice balance of $1,000 that has no cash value. It cannot be withdrawn, transferred or exchanged, and fun-mode results do not count towards wagering or cashback."],
-    ["8. Games and fairness", "Game results are generated on our servers using a cryptographically secure random number generator. The theoretical return to player for each game is shown in its rules. Minimum bet is $0.10 and maximum bet is $1,000 per round. In the event of a malfunction, system error or obvious mistake, affected bets and payouts are void. If you disconnect during a round, the round is settled according to the game's rules when you return."],
-    ["9. Responsible gambling", "Gambling should be entertainment, not a way to make money. Only play with money you can afford to lose and take regular breaks. If you would like to limit or close your account, or take a break, contact support. Free, confidential help is available from organisations such as Gambling Help Online, GamCare and Gamblers Anonymous."],
-    ["10. Closing accounts", "You may close your account at any time. We may suspend or close an account for breach of these terms, fraud, chargebacks, abuse or legal or regulatory reasons. Where an account is closed without breach, any withdrawable real balance will be returned to you."],
-    ["11. Sports betting", "Sports bets are accepted before a match starts only; there is no in-play betting. The odds shown when you place a bet are the odds you get. Soccer is settled on the result after 90 minutes plus stoppage time; basketball includes overtime; other sports are settled on the official result. Matches that are abandoned, postponed or not completed are void and stakes are refunded. Handicap bets that finish level on a whole-number line are refunded. The maximum stake is $500 and the maximum return is $5,000 per bet. We may void bets placed at obviously wrong prices caused by a technical error."],
-    ["12. Liability", "The Site is provided “as is”. To the extent permitted by law, we are not liable for indirect or consequential losses, or for losses caused by events outside our reasonable control, including blockchain network delays or failures."],
-    ["13. Changes", "We may update these terms from time to time. The current version is always available on this page, and continued use of the Site after a change means you accept the updated terms."],
-    ["14. Operator and governing law", "[Operator name, company registration number, registered address, gambling licence number and issuing authority, and governing law to be inserted before real-money deposits are accepted.]"],
-  ];
+  const TERMS = window.CQTerms.TERMS;
+
   function termsBody() {
-    return el("div", { class: "terms" }, el("p", { class: "muted" }, "Last updated 26 November 2026"), ...TERMS.map(([h, p]) => el("section", {}, el("h2", {}, h), el("p", {}, p))));
+    return el("div", { class: "terms" }, el("p", { class: "muted" }, `Last updated ${window.CQTerms.UPDATED}`), ...TERMS.map(([h, p]) => el("section", {}, el("h2", {}, h), el("p", {}, p))));
   }
   async function terms(view) { view.replaceChildren(head("📜", "Terms & Conditions", null), el("div", { class: "panel" }, termsBody())); }
   function termsModal() {
@@ -195,11 +181,47 @@
     view.replaceChildren(head("🧾", "Bet history", "Your last 40 transactions"), el("div", { class: "panel" }, wrap));
     try {
       const { rows } = await api("/api/history");
-      const label = { bet: "Bet", win: "Win", deposit: "Deposit", withdraw: "Withdrawal", withdraw_refund: "Withdrawal refunded", cashback: "Cashback", fun_topup: "Fun reload" };
+      const label = { bet: "Bet", win: "Win", deposit: "Deposit", withdraw: "Withdrawal", withdraw_refund: "Withdrawal refunded", cashback: "Cashback", referral: "Referral earnings", fun_topup: "Fun reload" };
       wrap.replaceChildren(el("table", { class: "bets-table" }, el("thead", {}, el("tr", {}, el("th", {}, "Time"), el("th", {}, "Mode"), el("th", {}, "Type"), el("th", {}, "Game"), el("th", { class: "num" }, "Amount"))),
         el("tbody", {}, rows.length ? rows.map((r) => el("tr", { class: ["win", "deposit", "cashback", "withdraw_refund"].includes(r.type) ? "won" : "" }, el("td", {}, when(r.at)), el("td", {}, el("span", { class: `mode-tag ${r.mode}` }, r.mode)), el("td", {}, label[r.type] || r.type), el("td", {}, r.game || "–"), el("td", { class: "num pay" }, `${["bet", "withdraw"].includes(r.type) ? "−" : "+"}${fmtUSD(r.amount)}`))) : el("tr", {}, el("td", { colspan: "5", class: "empty" }, "Nothing yet")))));
     } catch (e) { fail(e); }
   }
 
-  window.CQPages = { wallet, bonus, terms, termsModal, history: historyPage, coinIcon };
+  /* ================= INVITE (referrals) ================= */
+  async function invite(view) {
+    const linkIn = el("input", { class: "text-in boxed ref-link", readonly: true, value: "Loading…", "aria-label": "Your invite link" });
+    const copyBtn = el("button", { type: "button", class: "btn btn-gold" }, "Copy link");
+    const shareRow = el("div", { class: "ref-share" });
+    const stats = el("div", { class: "cb-stats" });
+    const hist = el("div", { class: "table-wrap" });
+    view.replaceChildren(
+      head("🤝", "Invite friends", "Earn 10% of your friends' weekly net losses — paid every Sunday."),
+      el("section", { class: "cb-hero ref-hero" },
+        el("div", {}, el("p", { class: "hero-kicker" }, "Refer & earn"), el("h2", {}, el("span", {}, "10%"), " every week"), el("p", {}, "Share your link. When friends sign up through it, you get 10% of their net real-money losses for every cashback week, paid to your real balance with no wagering requirement.")),
+        el("div", { class: "ref-box" }, el("small", {}, "Your invite link"), el("div", { class: "ref-row" }, linkIn, copyBtn), shareRow)),
+      stats,
+      el("section", { class: "panel" }, el("h2", {}, "How it works"), el("ol", { class: "how" },
+        el("li", {}, "Share your link anywhere — Telegram, Discord, X, WhatsApp."),
+        el("li", {}, "Friends who open it and sign up within 30 days are linked to you."),
+        el("li", {}, "Each week (Sunday 10:00 pm UTC to Sunday 10:00 pm UTC) we add up each friend's real-money bets minus winnings."),
+        el("li", {}, "If a friend finishes the week down, 10% of that loss is added to your real balance. There's no limit on how many friends you invite."))),
+      el("section", { class: "panel" }, el("h2", {}, "Earnings history"), hist));
+    copyBtn.addEventListener("click", async () => { try { await navigator.clipboard.writeText(linkIn.value); copyBtn.textContent = "Copied ✓"; setTimeout(() => (copyBtn.textContent = "Copy link"), 1600); } catch { linkIn.select(); } });
+    try {
+      const r = await api("/api/referral");
+      linkIn.value = r.link;
+      const text = encodeURIComponent("Join me on CareQuay — no-KYC crypto casino & sportsbook with 20% weekly cashback:");
+      const u = encodeURIComponent(r.link);
+      shareRow.replaceChildren(...[
+        el("a", { class: "btn btn-ghost btn-sm", href: `https://t.me/share/url?url=${u}&text=${text}`, target: "_blank", rel: "noopener" }, "Telegram"),
+        el("a", { class: "btn btn-ghost btn-sm", href: `https://twitter.com/intent/tweet?url=${u}&text=${text}`, target: "_blank", rel: "noopener" }, "X"),
+        el("a", { class: "btn btn-ghost btn-sm", href: `https://wa.me/?text=${text}%20${u}`, target: "_blank", rel: "noopener" }, "WhatsApp"),
+        navigator.share ? el("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: () => navigator.share({ title: "CareQuay Casino", url: r.link }).catch(() => {}) }, "More…") : null].filter(Boolean));
+      stats.replaceChildren(...[["Friends invited", String(r.invited)], ["Total earned", fmtUSD(r.earned)], ["Your share", `${Math.round(r.rate * 100)}%`], ["Next payout", new Date(r.nextPayout).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })]].map(([k, v], i) => el("div", { class: `cb-stat${i === 1 ? " hl" : ""}` }, el("small", {}, k), el("b", {}, v))));
+      hist.replaceChildren(el("table", { class: "bets-table" }, el("thead", {}, el("tr", {}, el("th", {}, "Week starting"), el("th", {}, "Friends"), el("th", { class: "num" }, "Earned"))),
+        el("tbody", {}, r.weeks.length ? r.weeks.map((w) => el("tr", {}, el("td", {}, new Date(w.week).toLocaleDateString()), el("td", {}, String(w.players)), el("td", { class: "num pay" }, fmtUSD(w.amount)))) : el("tr", {}, el("td", { colspan: "3", class: "empty" }, "No referral earnings yet — share your link to start.")))));
+    } catch (e) { fail(e); }
+  }
+
+  window.CQPages = { wallet, bonus, terms, termsModal, history: historyPage, coinIcon, invite };
 })();

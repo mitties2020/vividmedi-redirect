@@ -93,6 +93,18 @@ CREATE TABLE IF NOT EXISTS sports_bets (
 );
 CREATE INDEX IF NOT EXISTS sports_bets_user ON sports_bets (user_id, id);
 CREATE INDEX IF NOT EXISTS sports_bets_open ON sports_bets (status, commence_time);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ref_code TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_ref_code ON users (lower(ref_code)) WHERE ref_code IS NOT NULL;
+CREATE TABLE IF NOT EXISTS referral_rewards (
+  referrer_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  week_start TIMESTAMPTZ NOT NULL,
+  net BIGINT NOT NULL,
+  amount BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (referrer_id, user_id, week_start)
+);
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
@@ -106,6 +118,7 @@ const userRow = (r) => r && {
   created_at: new Date(r.created_at),
   fun_balance: num(r.fun_balance), real_balance: num(r.real_balance), wager_remaining: num(r.wager_remaining),
   cashback_until: r.cashback_until ? new Date(r.cashback_until) : null,
+  ref_code: r.ref_code || null, referred_by: r.referred_by == null ? null : num(r.referred_by),
 };
 const betRow = (x) => x && { ...x, id: num(x.id), user_id: num(x.user_id), point: x.point == null ? null : num(x.point), odds: num(x.odds), stake: num(x.stake), payout: num(x.payout), commence_time: new Date(x.commence_time) };
 const ACCT_FIELDS = ["fun_balance", "real_balance", "wager_remaining", "cashback_until"];
@@ -120,10 +133,12 @@ function pgStore(url) {
     kind: "postgres",
     async init() { await q(SCHEMA); },
     users: {
-      async create({ email, passHash }) {
-        const r = await q("INSERT INTO users (email, pass_hash) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING RETURNING *", [email, passHash]);
+      async create({ email, passHash, referredBy }) {
+        const r = await q("INSERT INTO users (email, pass_hash, referred_by) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING RETURNING *", [email, passHash, referredBy || null]);
         return userRow(r.rows[0]) || null;
       },
+      async byRefCode(code) { return userRow((await q("SELECT * FROM users WHERE lower(ref_code) = lower($1)", [code])).rows[0]); },
+      async setRefCode(id, code) { try { const r = await q("UPDATE users SET ref_code = $2 WHERE id = $1 AND ref_code IS NULL", [id, code]); return r.rowCount === 1; } catch (e) { if (e.code === "23505") return false; throw e; } },
       async byEmail(email) { return userRow((await q("SELECT * FROM users WHERE email = $1", [email])).rows[0]); },
       async byId(id) { return userRow((await q("SELECT * FROM users WHERE id = $1", [id])).rows[0]); },
       async setConfirmed(id) { await q("UPDATE users SET confirmed = TRUE WHERE id = $1", [id]); },
@@ -168,6 +183,10 @@ function pgStore(url) {
             const r = await client.query("UPDATE sports_bets SET status = $2, payout = $3, result = $4, settled_at = now() WHERE id = $1 AND user_id = $5 AND status = 'open' RETURNING id", [id, status, payout, JSON.stringify(result || {}), userId]);
             return r.rowCount === 1;
           },
+          async referralReward(r) {
+            const x = await client.query("INSERT INTO referral_rewards (referrer_id, user_id, week_start, net, amount) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [userId, r.user_id, r.week_start, r.net, r.amount]);
+            return x.rowCount === 1;
+          },
           async sumWindow(mode, from, to) {
             const s = await client.query("SELECT COALESCE(SUM(CASE WHEN type='bet' THEN amount ELSE 0 END),0) AS bets, COALESCE(SUM(CASE WHEN type='win' THEN amount ELSE 0 END),0) AS wins FROM ledger WHERE user_id = $1 AND mode = $2 AND created_at >= $3 AND created_at < $4", [userId, mode, from, to]);
             return { bets: num(s.rows[0].bets), wins: num(s.rows[0].wins) };
@@ -211,6 +230,18 @@ function pgStore(url) {
       async openForEvent(eventId) { return (await q("SELECT * FROM sports_bets WHERE status = 'open' AND event_id = $1", [eventId])).rows.map(betRow); },
       async recent(limit = 100) { return (await q("SELECT b.*, u.email FROM sports_bets b JOIN users u ON u.id = b.user_id WHERE b.status <> 'open' ORDER BY b.settled_at DESC LIMIT $1", [limit])).rows.map(betRow); },
     },
+    referrals: {
+      async weekNet(from, to) {
+        const r = await q("SELECT l.user_id, u.referred_by AS referrer_id, SUM(CASE WHEN l.type='bet' THEN l.amount ELSE 0 END) - SUM(CASE WHEN l.type='win' THEN l.amount ELSE 0 END) AS net FROM ledger l JOIN users u ON u.id = l.user_id WHERE u.referred_by IS NOT NULL AND l.mode = 'real' AND l.created_at >= $1 AND l.created_at < $2 GROUP BY l.user_id, u.referred_by", [from, to]);
+        return r.rows.map((x) => ({ user_id: num(x.user_id), referrer_id: num(x.referrer_id), net: num(x.net) })).filter((x) => x.net > 0);
+      },
+      async stats(referrerId) {
+        const invited = num((await q("SELECT COUNT(*) AS n FROM users WHERE referred_by = $1", [referrerId])).rows[0].n);
+        const earned = num((await q("SELECT COALESCE(SUM(amount),0) AS s FROM referral_rewards WHERE referrer_id = $1", [referrerId])).rows[0].s);
+        const recent = (await q("SELECT week_start, SUM(amount) AS amount, COUNT(*) AS players FROM referral_rewards WHERE referrer_id = $1 GROUP BY week_start ORDER BY week_start DESC LIMIT 12", [referrerId])).rows.map((x) => ({ week_start: x.week_start, amount: num(x.amount), players: num(x.players) }));
+        return { invited, earned, recent };
+      },
+    },
     async kvGet(key) { const r = await q("SELECT value FROM kv WHERE key = $1", [key]); return r.rows[0] ? r.rows[0].value : null; },
     async kvSet(key, value) { await q("INSERT INTO kv (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()", [key, JSON.stringify(value)]); },
     async setWithdrawal(id, status, txid) { await q("UPDATE withdrawals SET status = $2, txid = COALESCE($3, txid), updated_at = now() WHERE id = $1", [id, status, txid || null]); },
@@ -220,7 +251,7 @@ function pgStore(url) {
 /* ---------------- In-memory (local testing) ---------------- */
 function memStore() {
   const users = new Map(), byEmail = new Map(), tokens = new Map(), sessions = new Map();
-  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [], sbets = [], kv = new Map();
+  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [], sbets = [], kv = new Map(), rrewards = new Map();
   let uid = 0, lid = 0, did = 0, wid = 0, sid = 0;
   const locks = new Map();
   const lock = (id) => { const prev = locks.get(id) || Promise.resolve(); let release; const next = new Promise((r) => (release = r)); locks.set(id, prev.then(() => next)); return prev.then(() => release); };
@@ -233,13 +264,15 @@ function memStore() {
     kind: "memory",
     async init() {},
     users: {
-      async create({ email, passHash }) {
+      async create({ email, passHash, referredBy }) {
         if (byEmail.has(email)) return null;
-        const u = { id: ++uid, email, pass_hash: passHash, confirmed: false, created_at: new Date(), fun_balance: 0, real_balance: 0, wager_remaining: 0, cashback_until: null };
+        const u = { id: ++uid, email, pass_hash: passHash, confirmed: false, created_at: new Date(), fun_balance: 0, real_balance: 0, wager_remaining: 0, cashback_until: null, ref_code: null, referred_by: referredBy || null };
         users.set(u.id, u); byEmail.set(email, u.id); return { ...u };
       },
       async byEmail(email) { const id = byEmail.get(email); return id ? { ...users.get(id) } : null; },
       async byId(id) { const u = users.get(id); return u ? { ...u } : null; },
+      async byRefCode(code) { for (const u of users.values()) if (u.ref_code && u.ref_code.toLowerCase() === String(code).toLowerCase()) return { ...u }; return null; },
+      async setRefCode(id, code) { for (const u of users.values()) if (u.ref_code && u.ref_code.toLowerCase() === code.toLowerCase()) return false; const u = users.get(id); if (!u || u.ref_code) return false; u.ref_code = code; return true; },
       async setConfirmed(id) { users.get(id).confirmed = true; },
       async setPassword(id, hash) { users.get(id).pass_hash = hash; },
       async setPasswordUnconfirmed(id, hash) { const u = users.get(id); if (!u.confirmed) u.pass_hash = hash; },
@@ -260,7 +293,7 @@ function memStore() {
         const u = users.get(userId);
         if (!u) throw new Error("no such user");
         const acct = { ...u };
-        const pending = { ledger: [], state: new Map(), withdrawals: [], deposits: [], sbets: [], settle: [] };
+        const pending = { ledger: [], state: new Map(), withdrawals: [], deposits: [], sbets: [], settle: [], rr: new Map() };
         const ops = {
           async ledger(row) { pending.ledger.push({ id: ++lid, user_id: userId, created_at: new Date(), ...row }); },
           async getState(game) { const k = `${userId}:${game}`; if (pending.state.has(k)) return pending.state.get(k); const s = gstate.get(k); return s ? JSON.parse(JSON.stringify(s)) : null; },
@@ -268,6 +301,7 @@ function memStore() {
           async withdrawal(row) { const w = { id: ++wid, user_id: userId, status: "pending", created_at: new Date(), ...row }; pending.withdrawals.push(w); return w.id; },
           async deposit(row) { const d = { id: ++did, user_id: userId, status: "credited", created_at: new Date(), ...row }; pending.deposits.push(d); return d.id; },
           async sumWindow(mode, from, to) { return sum(userId, mode, from, to); },
+          async referralReward(r) { const k = `${userId}:${r.user_id}:${new Date(r.week_start).toISOString()}`; if (rrewards.has(k) || pending.rr.has(k)) return false; pending.rr.set(k, { referrer_id: userId, ...r, week_start: new Date(r.week_start), created_at: new Date() }); return true; },
           async sportsBet(b) { const row = { id: ++sid, user_id: userId, status: "open", payout: 0, result: null, created_at: new Date(), settled_at: null, ...b, commence_time: new Date(b.commence_time) }; pending.sbets.push(row); return row.id; },
           async settleSportsBet(id, status, payout, result) { const b = sbets.find((x) => x.id === id && x.user_id === userId && x.status === "open"); if (!b) return false; pending.settle.push(() => Object.assign(b, { status, payout, result, settled_at: new Date() })); return true; },
         };
@@ -275,7 +309,7 @@ function memStore() {
         for (const f of ACCT_FIELDS) u[f] = acct[f];
         ledger.push(...pending.ledger);
         for (const [k, s] of pending.state) { if (s == null) gstate.delete(k); else gstate.set(k, s); }
-        withdrawals.push(...pending.withdrawals); deposits.push(...pending.deposits); sbets.push(...pending.sbets); pending.settle.forEach((f) => f());
+        withdrawals.push(...pending.withdrawals); deposits.push(...pending.deposits); sbets.push(...pending.sbets); pending.settle.forEach((f) => f()); for (const [k, v] of pending.rr) rrewards.set(k, v);
         return out;
       } finally { release(); }
     },
@@ -298,6 +332,18 @@ function memStore() {
       async open() { return sbets.filter((b) => b.status === "open").map((b) => ({ ...b, email: users.get(b.user_id).email })); },
       async openForEvent(eventId) { return sbets.filter((b) => b.status === "open" && b.event_id === eventId).map((b) => ({ ...b })); },
       async recent(limit = 100) { return sbets.filter((b) => b.status !== "open").slice(-limit).reverse().map((b) => ({ ...b, email: users.get(b.user_id).email })); },
+    },
+    referrals: {
+      async weekNet(from, to) {
+        const m = new Map();
+        for (const l of ledger) { const u = users.get(l.user_id); if (!u || !u.referred_by || l.mode !== "real" || l.created_at < from || l.created_at >= to) continue; const e = m.get(u.id) || { user_id: u.id, referrer_id: u.referred_by, net: 0 }; if (l.type === "bet") e.net += l.amount; if (l.type === "win") e.net -= l.amount; m.set(u.id, e); }
+        return [...m.values()].filter((x) => x.net > 0);
+      },
+      async stats(referrerId) {
+        const rs = [...rrewards.values()].filter((r) => r.referrer_id === referrerId);
+        const byWeek = new Map(); for (const r of rs) { const k = r.week_start.toISOString(); const e = byWeek.get(k) || { week_start: r.week_start, amount: 0, players: 0 }; e.amount += r.amount; e.players++; byWeek.set(k, e); }
+        return { invited: [...users.values()].filter((u) => u.referred_by === referrerId).length, earned: rs.reduce((s, r) => s + r.amount, 0), recent: [...byWeek.values()].sort((a, b) => b.week_start - a.week_start).slice(0, 12) };
+      },
     },
     async kvGet(key) { return kv.has(key) ? JSON.parse(JSON.stringify(kv.get(key))) : null; },
     async kvSet(key, value) { kv.set(key, JSON.parse(JSON.stringify(value))); },

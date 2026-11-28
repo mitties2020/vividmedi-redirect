@@ -30,7 +30,7 @@
       const status = el("div", { class: "bj-status" }, "Place your bet and deal");
       stage.append(el("div", { class: "gframe" }, controls, el("div", { class: "gboard bj-table" },
         el("div", { class: "bj-row" }, el("div", { class: "bj-label" }, "Dealer ", dealerTot), dealerEl),
-        el("div", { class: "bj-felt-text" }, "BLACKJACK PAYS 3 TO 2 · DEALER STANDS ON 17"), status, handsEl)));
+        el("div", { class: "bj-felt-text" }, "BLACKJACK PAYS 3 TO 2 · DEALER HITS SOFT 17"), status, handsEl)));
       let v = null, busy = false, shownDealer = 0, shownHands = [], alive = true;
       function render(view, { dealerUpTo } = {}) {
         v = view;

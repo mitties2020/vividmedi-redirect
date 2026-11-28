@@ -37,8 +37,7 @@
       busy(f, true); setMsg(f, "");
       try {
         await api("/api/auth/login", { email, password: f.password.value });
-        history.replaceState(null, "", location.pathname + (location.hash || "#/"));
-        location.reload();
+        location.replace("/" + (location.hash || "#/"));
       } catch (err) {
         busy(f, false);
         setMsg(f, err.message);
@@ -68,7 +67,7 @@
       busy(f, true); setMsg(f, "");
       try {
         const r = await api("/api/auth/register", { email, password: f.password.value, password2: f.password2.value, terms: terms.checked });
-        if (r.loggedIn) { history.replaceState(null, "", location.pathname + "#/"); location.reload(); return; }
+        if (r.loggedIn) { location.replace("/#/"); return; }
         go("sent");
       } catch (err) { busy(f, false); setMsg(f, err.message); }
     });
@@ -140,12 +139,13 @@
     const card = el("div", { class: "auth-card" },
       el("div", { class: "auth-brand" }, el("span", { html: logo(54, "lga") }), el("div", {}, el("b", {}, "CareQuay"), el("small", {}, "Casino"), el("em", { class: "kyc-badge" }, "No KYC Casino"), el("em", { class: "kyc-badge gold" }, "Fast withdrawals · under 10 min"))),
       notice ? el("p", { class: `auth-notice ${notice.kind}` }, notice.text) : null,
+      view === "register" && /(?:^|; )cq_ref=/.test(document.cookie) ? el("p", { class: "auth-notice ok" }, "🎉 You were invited by a friend — welcome to CareQuay!") : null,
       tabs, body);
     notice = null;
     root().replaceChildren(
       el("div", { class: "auth-bg", "aria-hidden": "true" }, el("div", { class: "auth-grid" }), el("div", { class: "auth-orbit o1" }, el("i")), el("div", { class: "auth-orbit o2" }, el("i")), el("div", { class: "auth-glow" })),
       card,
-      el("p", { class: "auth-foot" }, el("span", { class: "age" }, "18+"), "Gamble responsibly. ", el("button", { type: "button", class: "auth-inline", onclick: () => window.CQPages?.termsModal() }, "Terms & Conditions")));
+      el("p", { class: "auth-foot" }, el("a", { class: "auth-inline", href: "/" }, "← CareQuay home"), " · ", el("span", { class: "age" }, "18+"), "Gamble responsibly. ", el("button", { type: "button", class: "auth-inline", onclick: () => window.CQPages?.termsModal() }, "Terms & Conditions")));
     setTimeout(() => root().querySelector("input:not([type=checkbox])")?.focus(), 30);
   }
 
@@ -156,7 +156,7 @@
     if (text) notice = { text, kind: "warn" };
     if (q.get("confirmed") === "1") { notice = { text: "Email confirmed — you can log in now.", kind: "ok" }; history.replaceState(null, "", location.pathname); }
     if (q.get("confirmed") === "0") { notice = { text: "That confirmation link is invalid or has expired. Log in to get a new one.", kind: "warn" }; history.replaceState(null, "", location.pathname); }
-    view = q.get("reset") ? "reset" : "login";
+    view = q.get("reset") ? "reset" : location.pathname === "/signup" ? "register" : "login";
     render();
   }
 

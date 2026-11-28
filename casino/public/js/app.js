@@ -8,7 +8,7 @@
     slots: { title: "Slots", sub: "Premium video slots", icon: "🎰" },
     tables: { title: "Table games", sub: "Cards and roulette", icon: "🃏" },
   };
-  const PAGES = { wallet: "Wallet", bonus: "Bonuses", terms: "Terms & Conditions", history: "Bet history", admin: "Admin" };
+  const PAGES = { wallet: "Wallet", bonus: "Bonuses", invite: "Invite friends", terms: "Terms & Conditions", history: "Bet history", admin: "Admin" };
   let cleanup = null;
   const view = () => $("#view");
   const byCat = (c) => games.filter((g) => g.cat === c);
@@ -203,10 +203,11 @@
       el("p", { class: "nav-label" }, "Account"),
       link("#/wallet", "👛", "Wallet"),
       link("#/bonus", "🎁", "Bonuses"),
+      link("#/invite", "🤝", "Invite friends"),
       link("#/history", "🧾", "Bet history"),
       link("#/terms", "📜", "Terms & Conditions"),
       el("button", { type: "button", class: "nav-link nav-logout", onclick: () => logout() }, el("span", { class: "nav-icon" }, "⎋"), el("span", {}, "Log out")));
-    const logout = async () => { try { await api("/api/auth/logout", {}); } catch { /* ignore */ } location.hash = "#/"; location.reload(); };
+    const logout = async () => { try { await api("/api/auth/logout", {}); } catch { /* ignore */ } location.replace("/"); };
     $("#logout").addEventListener("click", logout);
     $("#menu-btn").addEventListener("click", () => document.body.classList.toggle("nav-open"));
     $("#scrim").addEventListener("click", () => document.body.classList.remove("nav-open"));

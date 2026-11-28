@@ -952,3 +952,11 @@ body[data-mode="real"] .topbar { box-shadow: inset 0 -2px 0 rgba(245, 196, 81, .
 }
 @media (max-width: 980px) { .sb-fab.away { display: none !important; } }
 .adm-ev .adm-score { width: 84px; flex: none; }
+/* Invite friends */
+.ref-box { display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 18px; background: rgba(0, 0, 0, .3); box-shadow: inset 0 0 0 1px rgba(245, 196, 81, .3); }
+.ref-box > small { color: var(--dim); font-size: .7rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.ref-row { display: flex; gap: 8px; }
+.ref-row .ref-link { flex: 1; min-width: 0; font-family: var(--mono); font-size: .85rem; }
+.ref-share { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 760px) { .ref-row { flex-direction: column; } }
+.auth-foot a.auth-inline { text-decoration: none; }
