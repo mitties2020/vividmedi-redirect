@@ -45,7 +45,7 @@
       el("div", { class: "hero-copy" },
         el("p", { class: "hero-kicker" }, el("span", { class: "kyc-badge big" }, "No KYC Casino"), el("span", { class: "kyc-badge big gold" }, "Fast withdrawals"), "CareQuay crypto casino"),
         el("h1", {}, "Bet. Spin. Deal.", el("br"), el("span", {}, "Cash out in crypto.")),
-        el("div", { class: "hero-cta" }, el("a", { class: "btn btn-gold", href: "#/wallet" }, "Deposit"), el("a", { class: "btn btn-ghost", href: "#/sports" }, "⚽ Sportsbook"), el("a", { class: "btn btn-ghost", href: "#/bonus" }, "20% weekly cashback")),
+        el("div", { class: "hero-cta" }, el("a", { class: "btn btn-gold", href: "#/wallet" }, "Deposit"), el("a", { class: "btn btn-ghost", href: "#/sports" }, "⚽ Sportsbook"), el("a", { class: "btn btn-tg", href: "https://t.me/carequay", target: "_blank", rel: "noopener" }, "✈️ Telegram"), el("a", { class: "btn btn-ghost", href: "#/bonus" }, "20% weekly cashback")),
         el("div", { class: "accept" }, el("span", { class: "accept-label" }, "We accept"), coins)),
       el("div", { class: "hero-art", "aria-hidden": "true" },
         el("div", { class: "hero-ring r1" }), el("div", { class: "hero-ring r2" }),

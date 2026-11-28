@@ -40,13 +40,14 @@ module.exports = function createTelegram({ store, SP }) {
     try {
       const me = await call("getMe"); botName = me.username;
       if (SITE().startsWith("https://")) {
-        await call("setWebhook", { url: `${SITE()}/api/telegram/webhook`, secret_token: SECRET, allowed_updates: ["message"], drop_pending_updates: false });
+        await call("setWebhook", { url: `${SITE()}/api/telegram/webhook`, secret_token: SECRET, allowed_updates: ["message", "inline_query"], drop_pending_updates: false });
         await call("setMyCommands", { commands: [
           { command: "odds", description: "Today's top matches and odds" },
           { command: "cashback", description: "Your 20% weekly cashback" },
           { command: "invite", description: "Your invite link and earnings" },
           { command: "balance", description: "Your balances (linked account)" },
           { command: "deposit", description: "How to deposit crypto" },
+          { command: "share", description: "Get a card to share with friends" },
           { command: "help", description: "What I can do" },
         ] });
       }
@@ -187,7 +188,7 @@ module.exports = function createTelegram({ store, SP }) {
   }
 
   /* ---------------- Helper bot (direct messages) ---------------- */
-  const startText = () => `👋 <b>Welcome to CareQuay</b> — no-KYC crypto casino & pre-match sportsbook.\n\n• 20% cashback on weekly losses\n• Withdrawals usually in under 10 minutes\n• BTC, ETH, LTC, BNB and TRON\n\nCommands:\n/odds — today's top matches\n/cashback — weekly cashback\n/invite — your invite link (earn 10%)\n/balance — your balances\n/deposit — how to deposit\n\nSupport: support@carequay.com\n\nTo get bet and withdrawal alerts here, open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b>.${FOOTER}`;
+  const startText = () => `👋 <b>Welcome to CareQuay</b> — no-KYC crypto casino & pre-match sportsbook.\n\n• 20% cashback on weekly losses\n• Withdrawals usually in under 10 minutes\n• BTC, ETH, LTC, BNB and TRON\n\nCommands:\n/odds — today's top matches\n/cashback — weekly cashback\n/invite — your invite link (earn 10%)\n/balance — your balances\n/deposit — how to deposit\n/share — a card to share with friends\n\nSupport: support@carequay.com\n\nTo get bet and withdrawal alerts here, open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b>.${FOOTER}`;
   const linkHint = () => `🔗 First connect your account: log in at ${SITE()}, open <b>Invite friends</b> and tap <b>Connect Telegram</b>.`;
 
   async function onMessage(m) {
@@ -208,6 +209,7 @@ module.exports = function createTelegram({ store, SP }) {
     switch (cmd) {
       case "/start": {
         const p = args[0] || "";
+        if (p === "share") return send(chat, linkHint() + "\n\nOnce linked, cards you share count towards your 10% referral earnings.");
         if (p.startsWith("link_")) {
           const uid = await store.tokens.take(S.sha(p.slice(5)), "tglink");
           if (!uid) return send(chat, "That connect link has expired. Open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b> again.");
@@ -236,6 +238,9 @@ module.exports = function createTelegram({ store, SP }) {
       }
       case "/deposit":
         return send(chat, `🪙 <b>Deposit crypto</b>\n\nLog in, open <b>Wallet</b>, pick a coin and copy your deposit address. Guides:\n${[["Bitcoin", "bitcoin"], ["Ethereum", "ethereum"], ["Litecoin", "litecoin"], ["BNB", "bnb"], ["TRON", "tron"]].map(([n, s]) => `• <a href="${SITE()}/deposit/${s}">${n}</a>`).join("\n")}\n\nOnly send each coin on the network shown in the wallet.`);
+      case "/share":
+        await send(chat, `👇 <b>Forward this to friends or groups.</b> ${user ? "Anyone who signs up through it earns you 10% of their weekly net losses." : "Connect your account on the Invite page first so sign-ups count for you."}\n\nTip: in any chat, type <code>@${botName}</code> and pick a card to share today's odds with your link.`);
+        return send(chat, inviteText(), shareKb(user));
       case "/stop":
         if (user) await store.users.setTelegram(user.id, null);
         return send(chat, "🔕 Alerts turned off and your account disconnected. Send /start any time to come back.");
@@ -244,9 +249,23 @@ module.exports = function createTelegram({ store, SP }) {
     }
   }
 
+  /* ---------------- Sharing: invite cards and inline mode ---------------- */
+  const inviteUrl = (u) => (u && u.ref_code ? `${SITE()}/r/${u.ref_code}` : `${SITE()}/`);
+  const inviteText = () => `🎰 <b>CareQuay</b> — no-KYC crypto casino & pre-match sportsbook\n\n⚽ Soccer, basketball, tennis & cricket odds\n💸 20% cashback on weekly losses\n⚡ Withdrawals usually in under 10 minutes\n🪙 BTC · ETH · LTC · BNB · TRX\n\nTry every game free with $1,000 fun money.${FOOTER}`;
+  const shareKb = (u) => kb([btn("🎁 Join CareQuay", inviteUrl(u))], [btn("📣 Telegram channel", CHANNEL ? `https://t.me/${CHANNEL.replace(/^@/, "")}` : `${SITE()}/`)]);
+  async function onInline(iq) {
+    const user = await store.users.byTelegram(iq.from.id).catch(() => null);
+    const results = [];
+    const odds = fixturesText(await upcoming(36, 5), "Top matches today");
+    if (odds) results.push({ type: "article", id: "odds", title: "⚽ Today's top matches & odds", description: "Share today's best matches with your invite link", input_message_content: { message_text: odds, parse_mode: "HTML", disable_web_page_preview: true }, reply_markup: shareKb(user).reply_markup });
+    results.push({ type: "article", id: "invite", title: "🎁 Invite a friend to CareQuay", description: user ? "Your personal invite link — earn 10% of their weekly net losses" : "Link your account on the Invite page to earn from invites", input_message_content: { message_text: inviteText(), parse_mode: "HTML", disable_web_page_preview: true }, reply_markup: shareKb(user).reply_markup });
+    await call("answerInlineQuery", { inline_query_id: iq.id, results, cache_time: 300, is_personal: true, ...(user ? {} : { button: { text: "Link your account to earn 10%", start_parameter: "share" } }) }).catch((e) => console.error("inline:", e.message));
+  }
+
   async function webhook(req, body) {
     if (!on() || req.headers["x-telegram-bot-api-secret-token"] !== SECRET) return false;
     if (body && body.message) onMessage(body.message).catch((e) => console.error("telegram msg:", e.message));
+    if (body && body.inline_query) onInline(body.inline_query).catch((e) => console.error("telegram inline:", e.message));
     return true;
   }
 
