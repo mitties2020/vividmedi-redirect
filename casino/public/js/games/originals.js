@@ -1,6 +1,7 @@
 /* CareQuay Casino — Crash, Plinko, Limbo, Mines, Dice, Keno (results from the server). */
 (() => {
   "use strict";
+  const SND = (n, ...a) => window.CQSound && CQSound.play(n, ...a);
   const { el, $$, betInput, field, segmented, statRow, registerGame, fmtUSD, sleep, play, act, gameState, fail, mfmt, frame, T } = CQ;
 
   /* ================= CRASH ================= */
@@ -8,7 +9,7 @@
     id: "crash", name: "Crash", cat: "originals", tag: "Original",
     art: { emoji: "🚀", bg: "linear-gradient(150deg,#ff6a3d,#b3135e 55%,#3a0b4a)", accent: "#ff6a3d" },
     blurb: "Watch the multiplier climb. Cash out before it crashes.",
-    rules: "<p>Place a bet and the rocket launches. The multiplier rises until a random crash point. Cash out before the crash to win your bet × the multiplier. Set an auto cash out and it happens for you even if you leave the page. Return to player 99%.</p>",
+    rules: "<p>Place a bet and the rocket launches. The multiplier rises until a random crash point. Cash out before the crash to win your bet × the multiplier. Set an auto cash out and it happens for you even if you leave the page. Return to player 97%.</p>",
     mount(stage) {
       const f = frame();
       const bet = betInput();
@@ -46,13 +47,13 @@
         const fill = ctx.createLinearGradient(0, 0, 0, h); fill.addColorStop(0, crashed ? "rgba(255,93,108,.25)" : "rgba(94,230,210,.22)"); fill.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = fill; ctx.fill();
         ctx.font = "26px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(crashed ? "💥" : "🚀", X(ms), Y(m) - 4); ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
       }
-      function idle() { running = false; cancelAnimationFrame(raf); clearTimeout(pollT); btn.textContent = "Bet"; btn.className = "btn btn-primary btn-lg btn-block"; btn.disabled = false; bet.disable(false); auto.disabled = false; profitV.textContent = "–"; }
+      function idle() { running = false; cancelAnimationFrame(raf); clearTimeout(pollT); if (rise) { rise.stop(); rise = null; } btn.textContent = "Bet"; btn.className = "btn btn-primary btn-lg btn-block"; btn.disabled = false; bet.disable(false); auto.disabled = false; profitV.textContent = "–"; }
       function pushHist(v) { past.unshift(v); past.length = Math.min(past.length, 14); hist.replaceChildren(...past.map((p) => el("span", { class: p >= 2 ? "hi" : "lo" }, mfmt(p)))); }
       function finish(v, payout) {
         const ms = performance.now() - t0;
         running = false; cancelAnimationFrame(raf); clearTimeout(pollT);
         if (v.cashedAt) { status.textContent = `Cashed out at ${mfmt(v.cashedAt)}${v.auto ? " (auto)" : ""} · crashed at ${mfmt(v.crash)}`; f.pop(v.cashedAt, payout, true); }
-        else { status.textContent = `Crashed at ${mfmt(v.crash)}`; f.pop(v.crash, 0, false); }
+        else { status.textContent = `Crashed at ${mfmt(v.crash)}`; f.pop(v.crash, 0, false); SND("boom"); }
         big.textContent = mfmt(v.crash); big.classList.add("crashed");
         draw(Math.max(ms, 1), v.crash, true);
         pushHist(v.crash);
@@ -70,12 +71,14 @@
         if (ms < 0) { status.textContent = `Launching in ${Math.ceil(-ms / 1000)}…`; raf = requestAnimationFrame(tick); return; }
         current = Math.floor(Math.exp(K * ms) * 100) / 100;
         big.textContent = mfmt(current);
+        if (!rise && window.CQSound) rise = CQSound.riser(); if (rise) rise.set(current);
         if (!cashing) { btn.disabled = false; btn.textContent = `Cash out ${fmtUSD(stake * current)}`; }
         profitV.textContent = fmtUSD(stake * current);
         status.textContent = autoAt ? `Auto cash out at ${mfmt(autoAt)}` : "Cash out before it crashes";
         draw(ms, current, false);
         raf = requestAnimationFrame(tick);
       }
+      let rise = null;
       function startAnim(startInMs, k, a, st) {
         K = k; autoAt = a; stake = st; running = true; cashing = false; current = 1; t0 = performance.now() + startInMs;
         big.classList.remove("crashed"); f.hidePop();
@@ -98,7 +101,7 @@
       });
       gameState("crash").then((s) => { if (alive && s.active && s.view) { startAnim(-s.view.elapsed, s.view.k, s.view.auto, s.view.stake); status.textContent = "Round in progress"; } }).catch(() => {});
       size();
-      return () => { alive = false; cancelAnimationFrame(raf); clearTimeout(pollT); ro.disconnect(); };
+      return () => { alive = false; if (rise) { rise.stop(); rise = null; } cancelAnimationFrame(raf); clearTimeout(pollT); ro.disconnect(); };
     },
   });
 
@@ -107,7 +110,7 @@
     id: "plinko", name: "Plinko", cat: "originals", tag: "Original",
     art: { emoji: "🔻", bg: "linear-gradient(150deg,#ff4fa3,#7b2cff 55%,#1b0f4a)", accent: "#ff4fa3" },
     blurb: "Drop the ball, bounce through the pegs, land a multiplier.",
-    rules: "<p>Each ball bounces left or right at every row and lands in a payout slot. Edge slots pay the most but are the hardest to hit. More rows and higher risk widen the spread. Return to player about 99%.</p>",
+    rules: "<p>Each ball bounces left or right at every row and lands in a payout slot. Edge slots pay the most but are the hardest to hit. More rows and higher risk widen the spread. Return to player about 97%.</p>",
     mount(stage) {
       const f = frame();
       const bet = betInput();
@@ -151,7 +154,9 @@
           const dir = k < b.path.length ? (b.path[k] ? 0.5 : -0.5) : 0;
           b.x = W / 2 + (rb - k / 2) * gap + dir * gap * frac;
           b.y = top - gap * 0.55 + k * gap + gap * frac - Math.sin(frac * Math.PI) * gap * 0.35;
+          if (k !== b.k && k > 0 && k <= b.path.length) { b.k = k; SND("peg"); }
           if (seg >= b.path.length && !b.done) {
+            SND("land");
             b.done = true; b.settle();
             const s = slots.children[b.slot]; if (s) { s.classList.remove("hit"); void s.offsetWidth; s.classList.add("hit"); }
           }
@@ -178,7 +183,7 @@
     id: "limbo", name: "Limbo", cat: "originals", tag: "Original",
     art: { emoji: "🎯", bg: "linear-gradient(150deg,#2bd4ff,#2563eb 55%,#0b1a4a)", accent: "#2bd4ff" },
     blurb: "Pick a target multiplier. Beat it and win.",
-    rules: "<p>Set a target multiplier, then bet. If the result is at or above your target you win bet × target. Higher targets win less often. Return to player 99%.</p>",
+    rules: "<p>Set a target multiplier, then bet. If the result is at or above your target you win bet × target. Higher targets win less often. Return to player 97%.</p>",
     mount(stage) {
       const f = frame(); const bet = betInput();
       const target = el("input", { class: "text-in boxed", type: "number", min: "1.01", max: "1000000", step: "0.01", value: "2.00" });
@@ -196,7 +201,7 @@
         const t = tv(); target.value = t.toFixed(2);
         try {
           const r = await play("limbo", { bet: bet.value, target: t });
-          const res = r.result.value; big.className = "limbo-num rolling";
+          const res = r.result.value; big.className = "limbo-num rolling"; SND("reelStart");
           const t0 = performance.now();
           await new Promise((done) => { const step = (now) => { const k = Math.min(1, (now - t0) / 650), e = 1 - Math.pow(1 - k, 3); big.textContent = mfmt(1 + (res - 1) * e); if (k < 1) requestAnimationFrame(step); else done(); }; requestAnimationFrame(step); });
           big.className = `limbo-num ${r.result.won ? "win" : "lose"}`; r.settle();
@@ -213,7 +218,7 @@
     id: "mines", name: "Mines", cat: "originals", tag: "Original",
     art: { emoji: "💣", bg: "linear-gradient(150deg,#33e1a0,#0f8a6b 55%,#06302a)", accent: "#33e1a0" },
     blurb: "Find the gems, dodge the mines, cash out whenever you like.",
-    rules: "<p>Choose how many mines hide in the 5×5 grid, then bet. Every gem you reveal raises your multiplier; hit a mine and the round is lost. Cash out any time. Your round is saved if you leave. Return to player 99%.</p>",
+    rules: "<p>Choose how many mines hide in the 5×5 grid, then bet. Every gem you reveal raises your multiplier; hit a mine and the round is lost. Cash out any time. Your round is saved if you leave. Return to player 97%.</p>",
     mount(stage) {
       const f = frame(); const bet = betInput();
       const mineSel = el("select", { class: "boxed" }, Array.from({ length: 24 }, (_, i) => el("option", { value: i + 1, selected: i + 1 === 3 }, `${i + 1} mine${i ? "s" : ""}`)));
@@ -249,6 +254,7 @@
         try {
           const r = await act("mines", "reveal", { tile: i });
           applyView(r.view);
+          SND(r.view.boom != null ? "boom" : "gem");
           if (r.done) { showEnd(r.view); setPlaying(false, r.view); if (r.view.boom != null) f.pop(0, 0, false); else f.pop(r.view.mult, r.payout, true); }
           else paint(r.view);
         } catch (e) { fail(e); }
@@ -284,7 +290,7 @@
     id: "dice", name: "Dice", cat: "originals", tag: "Original",
     art: { emoji: "🎲", bg: "linear-gradient(150deg,#ffd54a,#f08a24 55%,#5a2006)", accent: "#ffd54a" },
     blurb: "Slide your odds, roll over or under, set your own payout.",
-    rules: "<p>A number from 0.00 to 100.00 is rolled. Drag the slider to set a target and choose roll over or under. The smaller your chance, the bigger the payout. Return to player 99%.</p>",
+    rules: "<p>A number from 0.00 to 100.00 is rolled. Drag the slider to set a target and choose roll over or under. The smaller your chance, the bigger the payout. Return to player 97%.</p>",
     mount(stage) {
       const f = frame(); const bet = betInput();
       let over = true, target = 50.5;
@@ -307,6 +313,7 @@
         if (busy) return; busy = true; btn.disabled = true; slider.disabled = true; dir.lock(true); f.hidePop();
         try {
           const r = await play("dice", { bet: bet.value, target, over });
+          SND("dice");
           const { roll, won } = r.result;
           marker.style.left = `${roll}%`; marker.classList.add("show"); marker.firstChild.textContent = roll.toFixed(2); marker.classList.toggle("win", won); marker.classList.toggle("lose", !won);
           const t0 = performance.now();
@@ -324,7 +331,7 @@
     id: "keno", name: "Keno", cat: "originals", tag: "Original",
     art: { emoji: "🔢", bg: "linear-gradient(150deg,#b46bff,#5b21b6 55%,#1e0b3f)", accent: "#b46bff" },
     blurb: "Pick up to 10 numbers. Ten are drawn. Match to win.",
-    rules: "<p>Choose 1 to 10 numbers from 40, then bet. Ten numbers are drawn and your payout depends on how many you match — see the table under the board. Return to player about 97%.</p>",
+    rules: "<p>Choose 1 to 10 numbers from 40, then bet. Ten numbers are drawn and your payout depends on how many you match — see the table under the board. Return to player about 95%.</p>",
     mount(stage) {
       const f = frame(); const bet = betInput();
       const btn = el("button", { class: "btn btn-primary btn-lg btn-block", type: "button", disabled: true }, "Pick numbers");
@@ -348,7 +355,7 @@
         if (busy || !picks.size) return; busy = true; paint(); bet.disable(true); f.hidePop(); clearDraw();
         try {
           const r = await play("keno", { bet: bet.value, picks: [...picks] }); pending = r;
-          for (const d of r.result.drawn) { const c = cells[d - 1]; c.classList.add("drawn"); if (picks.has(d)) c.classList.add("hit"); await sleep(110); if (!alive) return; }
+          for (const d of r.result.drawn) { const c = cells[d - 1]; c.classList.add("drawn"); if (picks.has(d)) { c.classList.add("hit"); SND("gem"); } else SND("tick"); await sleep(110); if (!alive) return; }
           pays.querySelector(`[data-h="${r.result.hits}"]`)?.classList.add("on");
           r.settle(); pending = null; f.pop(r.result.mult, r.payout, r.payout > 0);
         } catch (e) { fail(e); }

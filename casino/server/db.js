@@ -70,6 +70,34 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS sports_bets (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  sport_key TEXT NOT NULL,
+  sport_title TEXT,
+  home TEXT NOT NULL,
+  away TEXT NOT NULL,
+  commence_time TIMESTAMPTZ NOT NULL,
+  market TEXT NOT NULL,
+  selection TEXT NOT NULL,
+  point NUMERIC,
+  odds NUMERIC NOT NULL,
+  stake BIGINT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  payout BIGINT NOT NULL DEFAULT 0,
+  result JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  settled_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS sports_bets_user ON sports_bets (user_id, id);
+CREATE INDEX IF NOT EXISTS sports_bets_open ON sports_bets (status, commence_time);
+CREATE TABLE IF NOT EXISTS kv (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 const num = (v) => (v == null ? v : Number(v));
@@ -79,6 +107,7 @@ const userRow = (r) => r && {
   fun_balance: num(r.fun_balance), real_balance: num(r.real_balance), wager_remaining: num(r.wager_remaining),
   cashback_until: r.cashback_until ? new Date(r.cashback_until) : null,
 };
+const betRow = (x) => x && { ...x, id: num(x.id), user_id: num(x.user_id), point: x.point == null ? null : num(x.point), odds: num(x.odds), stake: num(x.stake), payout: num(x.payout), commence_time: new Date(x.commence_time) };
 const ACCT_FIELDS = ["fun_balance", "real_balance", "wager_remaining", "cashback_until"];
 
 /* ---------------- Postgres ---------------- */
@@ -131,6 +160,14 @@ function pgStore(url) {
           },
           async withdrawal(row) { const w = await client.query("INSERT INTO withdrawals (user_id, coin, network, address, usd, crypto_amount, price) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id", [userId, row.coin, row.network || null, row.address, row.usd, row.crypto_amount, row.price]); return num(w.rows[0].id); },
           async deposit(row) { const d = await client.query("INSERT INTO deposits (user_id, coin, amount, usd, price, txid) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id", [userId, row.coin, row.amount, row.usd, row.price, row.txid || null]); return num(d.rows[0].id); },
+          async sportsBet(b) {
+            const r = await client.query("INSERT INTO sports_bets (user_id, mode, event_id, sport_key, sport_title, home, away, commence_time, market, selection, point, odds, stake) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id", [userId, b.mode, b.event_id, b.sport_key, b.sport_title, b.home, b.away, b.commence_time, b.market, b.selection, b.point, b.odds, b.stake]);
+            return num(r.rows[0].id);
+          },
+          async settleSportsBet(id, status, payout, result) {
+            const r = await client.query("UPDATE sports_bets SET status = $2, payout = $3, result = $4, settled_at = now() WHERE id = $1 AND user_id = $5 AND status = 'open' RETURNING id", [id, status, payout, JSON.stringify(result || {}), userId]);
+            return r.rowCount === 1;
+          },
           async sumWindow(mode, from, to) {
             const s = await client.query("SELECT COALESCE(SUM(CASE WHEN type='bet' THEN amount ELSE 0 END),0) AS bets, COALESCE(SUM(CASE WHEN type='win' THEN amount ELSE 0 END),0) AS wins FROM ledger WHERE user_id = $1 AND mode = $2 AND created_at >= $3 AND created_at < $4", [userId, mode, from, to]);
             return { bets: num(s.rows[0].bets), wins: num(s.rows[0].wins) };
@@ -168,6 +205,14 @@ function pgStore(url) {
     async withdrawals(userId) { return (await q("SELECT id, coin, network, address, usd, crypto_amount, price, status, txid, created_at FROM withdrawals WHERE user_id = $1 ORDER BY id DESC LIMIT 50", [userId])).rows.map((x) => ({ ...x, id: num(x.id), usd: num(x.usd), crypto_amount: num(x.crypto_amount), price: num(x.price) })); },
     async allWithdrawals(status) { return (await q("SELECT w.*, u.email FROM withdrawals w JOIN users u ON u.id = w.user_id WHERE ($1::text IS NULL OR w.status = $1) ORDER BY w.id DESC LIMIT 200", [status || null])).rows.map((x) => ({ ...x, id: num(x.id), user_id: num(x.user_id), usd: num(x.usd), crypto_amount: num(x.crypto_amount), price: num(x.price) })); },
     async withdrawalById(id) { const r = await q("SELECT * FROM withdrawals WHERE id = $1", [id]); const x = r.rows[0]; return x && { ...x, id: num(x.id), user_id: num(x.user_id), usd: num(x.usd) }; },
+    sports: {
+      async forUser(userId) { return (await q("SELECT * FROM sports_bets WHERE user_id = $1 ORDER BY (status = 'open') DESC, id DESC LIMIT 60", [userId])).rows.map(betRow); },
+      async open() { return (await q("SELECT b.*, u.email FROM sports_bets b JOIN users u ON u.id = b.user_id WHERE b.status = 'open' ORDER BY b.commence_time, b.id")).rows.map(betRow); },
+      async openForEvent(eventId) { return (await q("SELECT * FROM sports_bets WHERE status = 'open' AND event_id = $1", [eventId])).rows.map(betRow); },
+      async recent(limit = 100) { return (await q("SELECT b.*, u.email FROM sports_bets b JOIN users u ON u.id = b.user_id WHERE b.status <> 'open' ORDER BY b.settled_at DESC LIMIT $1", [limit])).rows.map(betRow); },
+    },
+    async kvGet(key) { const r = await q("SELECT value FROM kv WHERE key = $1", [key]); return r.rows[0] ? r.rows[0].value : null; },
+    async kvSet(key, value) { await q("INSERT INTO kv (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()", [key, JSON.stringify(value)]); },
     async setWithdrawal(id, status, txid) { await q("UPDATE withdrawals SET status = $2, txid = COALESCE($3, txid), updated_at = now() WHERE id = $1", [id, status, txid || null]); },
   };
 }
@@ -175,8 +220,8 @@ function pgStore(url) {
 /* ---------------- In-memory (local testing) ---------------- */
 function memStore() {
   const users = new Map(), byEmail = new Map(), tokens = new Map(), sessions = new Map();
-  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [];
-  let uid = 0, lid = 0, did = 0, wid = 0;
+  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [], sbets = [], kv = new Map();
+  let uid = 0, lid = 0, did = 0, wid = 0, sid = 0;
   const locks = new Map();
   const lock = (id) => { const prev = locks.get(id) || Promise.resolve(); let release; const next = new Promise((r) => (release = r)); locks.set(id, prev.then(() => next)); return prev.then(() => release); };
   const sum = (userId, mode, from, to) => {
@@ -215,7 +260,7 @@ function memStore() {
         const u = users.get(userId);
         if (!u) throw new Error("no such user");
         const acct = { ...u };
-        const pending = { ledger: [], state: new Map(), withdrawals: [], deposits: [] };
+        const pending = { ledger: [], state: new Map(), withdrawals: [], deposits: [], sbets: [], settle: [] };
         const ops = {
           async ledger(row) { pending.ledger.push({ id: ++lid, user_id: userId, created_at: new Date(), ...row }); },
           async getState(game) { const k = `${userId}:${game}`; if (pending.state.has(k)) return pending.state.get(k); const s = gstate.get(k); return s ? JSON.parse(JSON.stringify(s)) : null; },
@@ -223,12 +268,14 @@ function memStore() {
           async withdrawal(row) { const w = { id: ++wid, user_id: userId, status: "pending", created_at: new Date(), ...row }; pending.withdrawals.push(w); return w.id; },
           async deposit(row) { const d = { id: ++did, user_id: userId, status: "credited", created_at: new Date(), ...row }; pending.deposits.push(d); return d.id; },
           async sumWindow(mode, from, to) { return sum(userId, mode, from, to); },
+          async sportsBet(b) { const row = { id: ++sid, user_id: userId, status: "open", payout: 0, result: null, created_at: new Date(), settled_at: null, ...b, commence_time: new Date(b.commence_time) }; pending.sbets.push(row); return row.id; },
+          async settleSportsBet(id, status, payout, result) { const b = sbets.find((x) => x.id === id && x.user_id === userId && x.status === "open"); if (!b) return false; pending.settle.push(() => Object.assign(b, { status, payout, result, settled_at: new Date() })); return true; },
         };
         const out = await fn(acct, ops);
         for (const f of ACCT_FIELDS) u[f] = acct[f];
         ledger.push(...pending.ledger);
         for (const [k, s] of pending.state) { if (s == null) gstate.delete(k); else gstate.set(k, s); }
-        withdrawals.push(...pending.withdrawals); deposits.push(...pending.deposits);
+        withdrawals.push(...pending.withdrawals); deposits.push(...pending.deposits); sbets.push(...pending.sbets); pending.settle.forEach((f) => f());
         return out;
       } finally { release(); }
     },
@@ -246,6 +293,14 @@ function memStore() {
     async allWithdrawals(status) { return withdrawals.filter((w) => !status || w.status === status).map((w) => ({ ...w, email: users.get(w.user_id).email })).reverse(); },
     async withdrawalById(id) { return withdrawals.find((w) => w.id === id) || null; },
     async setWithdrawal(id, status, txid) { const w = withdrawals.find((x) => x.id === id); if (w) { w.status = status; if (txid) w.txid = txid; w.updated_at = new Date(); } },
+    sports: {
+      async forUser(userId) { return sbets.filter((b) => b.user_id === userId).sort((a, b) => (a.status === "open") - (b.status === "open") || a.id - b.id).reverse().slice(0, 60).map((b) => ({ ...b })); },
+      async open() { return sbets.filter((b) => b.status === "open").map((b) => ({ ...b, email: users.get(b.user_id).email })); },
+      async openForEvent(eventId) { return sbets.filter((b) => b.status === "open" && b.event_id === eventId).map((b) => ({ ...b })); },
+      async recent(limit = 100) { return sbets.filter((b) => b.status !== "open").slice(-limit).reverse().map((b) => ({ ...b, email: users.get(b.user_id).email })); },
+    },
+    async kvGet(key) { return kv.has(key) ? JSON.parse(JSON.stringify(kv.get(key))) : null; },
+    async kvSet(key, value) { kv.set(key, JSON.parse(JSON.stringify(value))); },
     // test helper
     _shiftLedger(userId, ms) { for (const l of ledger) if (l.user_id === userId) l.created_at = new Date(l.created_at.getTime() + ms); },
   };

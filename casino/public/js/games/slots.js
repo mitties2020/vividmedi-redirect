@@ -4,6 +4,7 @@
   const { el, betInput, registerGame, fmtUSD, sleep, play, fail } = CQ;
   const { DEFS } = window.SlotEngine;
   const idx = (def, reel, row) => reel * def.rows + row;
+  const SND = (n, ...a) => window.CQSound && CQSound.play(n, ...a);
   const allIds = (def) => [...def.syms.map((s) => s.s), def.wild && def.wild.s, def.scatter && def.scatter.s].filter(Boolean);
 
   function payTable(def) {
@@ -18,7 +19,7 @@
     if (def.mode === "anywhere") notes.push("Winning symbols vanish and new ones tumble in until no new wins land.");
     if (def.mode === "ways") notes.push("243 ways: wins pay left to right when a symbol appears on adjacent reels, in any position.");
     if (def.mode === "lines") notes.push(`${def.lines.length} fixed paylines, paying left to right.`);
-    return `<p>${notes.join(" ")}</p><table class="paytable"><thead><tr><th>Symbol</th>${heads.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table><p class="pt-unit">Payouts ${unit}. Return to player about 96%.</p>`;
+    return `<p>${notes.join(" ")}</p><table class="paytable"><thead><tr><th>Symbol</th>${heads.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table><p class="pt-unit">Payouts ${unit}. Return to player about 94%.</p>`;
   }
 
   function mount(def, stage) {
@@ -30,11 +31,13 @@
     const msg = el("div", { class: "slot-msg" }, def.mode === "anywhere" ? "8+ matching symbols anywhere pays" : def.mode === "ways" ? "243 ways to win" : `${def.lines.length} paylines`);
     const fsBanner = el("div", { class: "fs-banner", hidden: true });
     const gridEl = el("div", { class: `slot-grid mode-${def.mode}`, style: { "--reels": def.reels, "--rows": def.rows } });
+    const NS = "http://www.w3.org/2000/svg";
+    const lineSvg = document.createElementNS(NS, "svg"); lineSvg.setAttribute("class", "slot-lines"); lineSvg.setAttribute("aria-hidden", "true");
     const machine = el("div", { class: "slot-machine", style: { "--accent": def.theme.accent, "--slot-bg": def.theme.bg } },
       el("div", { class: "slot-lights", "aria-hidden": "true" }),
       el("div", { class: "slot-title" }, el("span", { class: "slot-title-sym", html: CQSym.html(def.theme.tile, "sym") }), def.name),
       fsBanner,
-      el("div", { class: "slot-window" }, gridEl),
+      el("div", { class: "slot-window" }, gridEl, lineSvg),
       el("div", { class: "slot-bar" }, el("div", { class: "slot-winbox" }, el("small", {}, "Win"), winV), msg));
     stage.append(el("div", { class: "slot-wrap" }, machine, el("div", { class: "slot-controls" }, bet.el, el("div", { class: "slot-btns" }, autoBtn, spinBtn, turboBtn), el("p", { class: "muted small" }, "Press Space to spin"))));
 
@@ -50,13 +53,40 @@
     const cellAt = (p) => reels[Math.floor(p / def.rows)]?.querySelector(".strip").children[p % def.rows];
 
     async function spinTo(g) {
-      const h = gridEl.querySelector(".scell")?.getBoundingClientRect().height || 80, fill = turbo ? 6 : 14;
+      const h = gridEl.querySelector(".scell")?.getBoundingClientRect().height || 80;
+      clearLines(); SND("reelStart");
+      // Near-miss suspense: if enough scatters have landed, the remaining reels spin longer.
+      const need = def.scatterNeed || 3; let seen = 0, extra = 0, teased = false;
+      const plan = g.map((col, reel) => {
+        const tease = !!def.scatter && def.freeSpins && def.mode !== "anywhere" && seen >= need - 1 && !turbo;
+        if (tease) extra += 650;
+        seen += col.filter((id) => id === (def.scatter && def.scatter.s)).length;
+        return { tease, dur: (turbo ? 260 : 560) + reel * (turbo ? 70 : 170) + extra };
+      });
       await Promise.all(g.map((col, reel) => {
+        const fill = (turbo ? 6 : 14) + Math.round(plan[reel].dur / 120);
         const strip = el("div", { class: "strip blur" }, [...col.map(cell), ...Array.from({ length: fill }, () => cell(randId()))]);
         reels[reel].replaceChildren(strip);
-        const a = strip.animate([{ transform: `translateY(${-fill * h}px)` }, { transform: "translateY(6px)", offset: 0.92 }, { transform: "translateY(0)" }], { duration: (turbo ? 260 : 520) + reel * (turbo ? 70 : 160), easing: "cubic-bezier(.25,.6,.3,1)", fill: "forwards" });
-        return a.finished.then(() => strip.classList.remove("blur"));
+        if (plan[reel].tease) { reels[reel].classList.add("tease"); if (!teased) { teased = true; setTimeout(() => SND("tease"), plan[reel].dur - 900); } }
+        const a = strip.animate([{ transform: `translateY(${-fill * h}px)` }, { transform: "translateY(7px)", offset: 0.93 }, { transform: "translateY(0)" }], { duration: plan[reel].dur, easing: "cubic-bezier(.22,.62,.28,1)", fill: "forwards" });
+        return a.finished.then(() => { strip.classList.remove("blur"); reels[reel].classList.remove("tease"); reels[reel].classList.add("landed"); setTimeout(() => reels[reel] && reels[reel].classList.remove("landed"), 260); SND("reelStop", reel); });
       }));
+    }
+    function clearLines() { lineSvg.replaceChildren(); }
+    function drawLines(wins) {
+      if (def.mode !== "lines") return;
+      const box = gridEl.parentElement.getBoundingClientRect();
+      lineSvg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+      wins.forEach((w, n) => {
+        const pts = def.lines[w.line].map((row, reel) => { const c = cellAt(idx(def, reel, row)); if (!c) return null; const r = c.getBoundingClientRect(); return `${r.left - box.left + r.width / 2},${r.top - box.top + r.height / 2}`; }).filter(Boolean).join(" ");
+        const pl = document.createElementNS(NS, "polyline"); pl.setAttribute("points", pts); pl.setAttribute("class", "pl"); pl.style.animationDelay = `${n * 90}ms`;
+        const glow = pl.cloneNode(); glow.setAttribute("class", "pl-glow");
+        lineSvg.append(glow, pl);
+      });
+    }
+    function countUp(node, to, ms) {
+      const t0 = performance.now();
+      return new Promise((done) => { const step = (now) => { const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3); node.textContent = fmtUSD(to * e); if (k < 1 && alive) requestAnimationFrame(step); else { node.textContent = fmtUSD(to); done(); } }; requestAnimationFrame(step); });
     }
     async function showSpin(sp, running) {
       gridEl.classList.remove("has-win");
@@ -67,16 +97,16 @@
         if (i > 0) { renderStatic(st.grid, st.fresh); await sleep(turbo ? 220 : 380); }
         if (st.wins.length) {
           st.wins.flatMap((w) => w.positions).forEach((p) => cellAt(p)?.classList.add("win"));
-          gridEl.classList.add("has-win");
+          gridEl.classList.add("has-win"); drawLines(st.wins); SND(i > 0 ? "tumble" : "smallWin");
           const best = st.wins.reduce((a, b) => (b.amount > a.amount ? b : a));
           msg.innerHTML = "";
           msg.append(el("span", { class: "msg-sym", html: CQSym.html(best.sym, "sym") }), def.mode === "anywhere" ? `${best.count} × ${CQSym.name(best.sym)} pays ${fmtUSD(best.amount)}` : def.mode === "ways" ? `${CQSym.name(best.sym)} on ${best.count} reels · ${best.ways} way${best.ways > 1 ? "s" : ""} · ${fmtUSD(best.amount)}` : `${best.count} × ${CQSym.name(best.sym)} on line ${best.line + 1} · ${fmtUSD(best.amount)}${st.wins.length > 1 ? ` (+${st.wins.length - 1} more)` : ""}`);
           shown += st.stepWin; setWin(running + shown);
           await sleep(turbo ? 380 : 750);
-          if (i < sp.steps.length - 1) { st.wins.flatMap((w) => w.positions).forEach((p) => cellAt(p)?.classList.add("pop")); await sleep(turbo ? 160 : 260); gridEl.classList.remove("has-win"); }
+          if (i < sp.steps.length - 1) { st.wins.flatMap((w) => w.positions).forEach((p) => cellAt(p)?.classList.add("pop")); SND("tumble"); await sleep(turbo ? 160 : 260); gridEl.classList.remove("has-win"); clearLines(); }
         }
       }
-      if (sp.trigger) { const last = sp.steps[sp.steps.length - 1]; last.grid.forEach((col, reel) => col.forEach((id, row) => { if (def.scatter && id === def.scatter.s) cellAt(idx(def, reel, row))?.classList.add("win", "scat-hit"); })); }
+      if (sp.trigger) { SND("scatter"); const last = sp.steps[sp.steps.length - 1]; last.grid.forEach((col, reel) => col.forEach((id, row) => { if (def.scatter && id === def.scatter.s) cellAt(idx(def, reel, row))?.classList.add("win", "scat-hit"); })); }
     }
     function setWin(v) { winV.textContent = fmtUSD(v); winV.classList.remove("bump"); void winV.offsetWidth; winV.classList.add("bump"); }
 
@@ -103,22 +133,24 @@
         fsBanner.hidden = true; msg.textContent = `Free spins paid ${fmtUSD(total)}`;
       }
       r.settle(); pendingSettle = null;
-      winV.textContent = fmtUSD(r.payout);
-      if (r.payout / stake >= 5) celebrate(r.payout / stake, r.payout);
+      if (r.payout / stake >= 5) { celebrate(r.payout / stake, r.payout); await countUp(winV, r.payout, 1400); }
+      else winV.textContent = fmtUSD(r.payout);
       busy = false; spinBtn.classList.remove("spinning"); bet.disable(false);
       if (autoRunning && autoLeft > 0 && alive) { autoLeft--; paintAuto(); await sleep(turbo ? 150 : 400); if (alive && autoRunning) round(); }
       else { autoRunning = false; autoLeft = 0; paintAuto(); }
     }
     function celebrate(x, amt) {
       const label = x >= 50 ? "MEGA WIN" : x >= 15 ? "BIG WIN" : "NICE WIN";
-      const b = el("div", { class: "big-win" }, el("small", {}, label), el("b", {}, fmtUSD(amt)), el("span", {}, `${x.toFixed(1)}× your bet`));
-      machine.append(b); setTimeout(() => b.remove(), 2300);
+      const amtEl = el("b", {}, "$0.00");
+      const coins = el("div", { class: "coin-rain", "aria-hidden": "true" }, Array.from({ length: x >= 15 ? 36 : 20 }, () => el("span", { class: "coin-drop", style: { left: `${Math.random() * 100}%`, "--d": `${0.9 + Math.random() * 1.1}s`, "--delay": `${Math.random() * 0.9}s`, "--s": `${0.6 + Math.random() * 0.7}` }, html: CQSym.html("coin", "sym") })));
+      const b = el("div", { class: `big-win${x >= 50 ? " mega" : ""}` }, coins, el("small", {}, label), amtEl, el("span", {}, `${x.toFixed(1)}× your bet`));
+      machine.append(b); countUp(amtEl, amt, 1300); setTimeout(() => b.classList.add("out"), 2600); setTimeout(() => b.remove(), 3000);
     }
     const STEPS = [10, 25, 50];
     function paintAuto() { autoBtn.textContent = autoRunning ? `Stop (${autoLeft + (busy ? 1 : 0)})` : "Auto"; autoBtn.classList.toggle("on", autoRunning); }
     autoBtn.addEventListener("click", () => { if (autoRunning) { autoRunning = false; autoLeft = 0; paintAuto(); return; } const n = STEPS[(+(autoBtn.dataset.n || 0)) % STEPS.length]; autoBtn.dataset.n = +(autoBtn.dataset.n || 0) + 1; autoRunning = true; autoLeft = n - 1; paintAuto(); round(); });
     turboBtn.addEventListener("click", () => { turbo = !turbo; turboBtn.classList.toggle("on", turbo); turboBtn.setAttribute("aria-pressed", String(turbo)); });
-    spinBtn.addEventListener("click", () => { if (autoRunning) { autoRunning = false; autoLeft = 0; paintAuto(); } round(); });
+    spinBtn.addEventListener("click", () => { SND("click"); if (autoRunning) { autoRunning = false; autoLeft = 0; paintAuto(); } round(); });
     const onKey = (e) => { if (e.code === "Space" && !/INPUT|SELECT|TEXTAREA|BUTTON|A/.test(document.activeElement.tagName)) { e.preventDefault(); round(); } };
     document.addEventListener("keydown", onKey);
     renderStatic(Array.from({ length: def.reels }, () => Array.from({ length: def.rows }, randId)));

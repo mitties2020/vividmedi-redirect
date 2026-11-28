@@ -298,7 +298,7 @@ function bjFinish(st) {
   st.phase = "done";
   const live = st.hands.some((h) => bjTotal(h.cards).t <= 21 && !(isBJ(h.cards) && !h.split));
   const dealerBJ = isBJ(st.dealer);
-  if (live && !dealerBJ) while (bjTotal(st.dealer).t < 17) st.dealer.push(st.shoe.pop());
+  if (live && !dealerBJ) for (let h = bjTotal(st.dealer); h.t < 17 || (h.t === 17 && h.soft); h = bjTotal(st.dealer)) st.dealer.push(st.shoe.pop());
   const d = bjTotal(st.dealer).t;
   let payout = 0;
   for (const h of st.hands) {

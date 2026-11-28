@@ -120,7 +120,14 @@
   }
 
   /* ---------- Cards ---------- */
+  let cardQ = 0, cardT = 0;
+  function cardSound(i) {
+    // one swish per dealt card, spaced out so a full hand sounds like dealing
+    const now = performance.now(); const at = Math.max(now, cardT + 90); cardT = at;
+    cardQ++; setTimeout(() => { cardQ--; window.CQSound && CQSound.play("card"); }, at - now);
+  }
   function cardEl(c, i = 0, extra = "") {
+    if (/\bdeal\b/.test(extra) && cardQ < 8) cardSound(i);
     if (!c || c.down) return el("div", { class: `pcard down ${extra}`, style: { "--i": i } }, el("span", { class: "back" }));
     const red = c.s === "♥" || c.s === "♦";
     return el("div", { class: `pcard${red ? " red" : ""} ${extra}`, style: { "--i": i } },

@@ -7,6 +7,7 @@ const createStore = require("./server/db");
 const S = require("./server/support");
 const G = require("./server/games");
 const T = require("./public/js/shared/tables.js");
+const createSports = require("./server/sports");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC = path.join(__dirname, "public");
@@ -18,6 +19,7 @@ const SESSION_DAYS = 30;
 const PROD = process.env.NODE_ENV === "production";
 const REQUIRE_CONFIRM = process.env.REQUIRE_EMAIL_CONFIRM === "1"; // off: accounts work straight after sign-up
 const store = createStore();
+const SP = createSports(store);
 
 const usd = (micro) => Math.floor(micro / 10000) / 100; // micro → dollars (cents precision, floored)
 const usdx = (micro) => micro / MICRO;                    // exact
@@ -390,6 +392,88 @@ route("POST", "/api/admin/withdrawals/:id", async ({ req, body, params }) => {
   }
   throw new HttpError(400, "Status must be paid or rejected.");
 });
+
+/* ---------- Sportsbook (pre-match only) ---------- */
+const sportsName = (b) => `${b.home} v ${b.away}`;
+const sportsHelpers = { creditAcct, gameName: sportsName };
+const betView = (b) => ({ id: b.id, mode: b.mode, sport: b.sport_key, league: b.sport_title, home: b.home, away: b.away, commence: b.commence_time, market: b.market, selection: b.selection, point: b.point, odds: b.odds, stake: usdx(b.stake), status: b.status, payout: usdx(b.payout), potential: usdx(Math.floor(b.stake * b.odds)), result: b.result && { homeScore: b.result.homeScore, awayScore: b.result.awayScore, winner: b.result.winner }, placed: b.created_at, settled: b.settled_at });
+let lastAuto = 0;
+const maybeAutoSettle = () => { if (Date.now() - lastAuto < 5 * 60e3) return; lastAuto = Date.now(); SP.autoSettle(sportsHelpers).catch((e) => console.error("auto-settle:", e.message)); };
+const wrapSports = async (fn) => { try { return await fn(); } catch (e) { if (e instanceof SP.SportsError) throw new HttpError(e.status, e.message, e.extra); throw e; } };
+
+route("GET", "/api/sports", async ({ req }) => {
+  await requireUser(req);
+  maybeAutoSettle();
+  const ls = await SP.leagues();
+  return { enabled: SP.CFG.key !== "" || SP.CFG.mock, groups: SP.GROUPS.map((g) => ({ ...g, leagues: ls.filter((l) => l.group === g.id) })), limits: { maxStake: SP.CFG.maxStake, maxPayout: SP.CFG.maxPayout } };
+});
+route("GET", "/api/sports/league/:key", async ({ req, params }) => {
+  await requireUser(req);
+  const L = await wrapSports(() => SP.league(params.key));
+  return { ...L, events: L.events.map((e) => ({ ...e, markets: Object.fromEntries(Object.entries(e.markets).map(([k, v]) => [k, v.map(({ prob, ...o }) => ({ ...o, pct: Math.round(prob * 1000) / 10 }))])) })) };
+});
+route("POST", "/api/sports/bet", async ({ req, body }) => {
+  const u = await requireUser(req);
+  const mode = modeOf(body);
+  const market = String(body.market || "");
+  if (!["h2h", "spreads"].includes(market)) throw new HttpError(400, "Unknown market.");
+  const stakeUsd = Math.floor(Number(body.stake) * 100) / 100;
+  if (!(stakeUsd >= T.MIN_BET)) throw new HttpError(400, `Minimum stake is $${T.MIN_BET.toFixed(2)}.`);
+  if (stakeUsd > SP.CFG.maxStake) throw new HttpError(400, `Maximum stake is $${SP.CFG.maxStake.toLocaleString("en-US")} per bet.`);
+  const { ev, o } = await wrapSports(() => SP.quote({ league: body.league, eventId: String(body.eventId || ""), market, selection: String(body.selection || ""), point: body.point }));
+  if (Number(body.odds) !== o.price) throw new HttpError(409, `Odds changed to ${o.price.toFixed(2)}. Check your bet slip and place it again.`, { odds: o.price, pct: Math.round(o.prob * 1000) / 10 });
+  if (stakeUsd * o.price > SP.CFG.maxPayout) throw new HttpError(400, `Maximum return is $${SP.CFG.maxPayout.toLocaleString("en-US")} per bet. Lower your stake to $${Math.floor((SP.CFG.maxPayout / o.price) * 100) / 100} or less.`);
+  const stake = Math.round(stakeUsd * 100) * 10000;
+  return store.tx(u.id, async (acct, ops) => {
+    await settleCashback(acct, ops);
+    debitAcct(acct, mode, stake);
+    const row = { mode, event_id: ev.id, sport_key: ev.sport_key, sport_title: ev.sport_title, home: ev.home, away: ev.away, commence_time: ev.commence, market, selection: o.name, point: market === "spreads" ? o.point : null, odds: o.price, stake };
+    const id = await ops.sportsBet(row);
+    await ops.ledger({ mode, type: "bet", amount: stake, game: sportsName(row), meta: { sportsBet: id } });
+    return { ok: true, id, mode, ...balances(acct) };
+  });
+});
+route("GET", "/api/sports/bets", async ({ req }) => {
+  const u = await requireUser(req);
+  maybeAutoSettle();
+  return { bets: (await store.sports.forUser(u.id)).map(betView) };
+});
+route("GET", "/api/admin/sports", async ({ req }) => {
+  requireAdmin(req);
+  const open = await store.sports.open();
+  const events = new Map();
+  for (const b of open) {
+    const e = events.get(b.event_id) || { eventId: b.event_id, sport: b.sport_key, league: b.sport_title, home: b.home, away: b.away, commence: b.commence_time, draw: SP.hasDraw(b.sport_key), needsScores: false, bets: 0, staked: 0, liability: {} };
+    e.bets++; e.staked += usdx(b.stake);
+    if (b.market === "spreads") e.needsScores = true;
+    const label = b.market === "spreads" ? `${b.selection} ${b.point > 0 ? "+" : ""}${b.point}` : b.selection;
+    e.liability[label] = Math.round(((e.liability[label] || 0) + usdx(Math.floor(b.stake * b.odds))) * 100) / 100;
+    events.set(b.event_id, e);
+  }
+  return { status: await SP.status(), events: [...events.values()], recent: (await store.sports.recent(30)).map((b) => ({ ...betView(b), email: b.email })) };
+});
+route("POST", "/api/admin/sports/settle", async ({ req, body }) => {
+  requireAdmin(req);
+  const eventId = String(body.eventId || "");
+  const bets = await store.sports.openForEvent(eventId);
+  if (!bets.length) throw new HttpError(404, "No open bets on that event.");
+  const b0 = bets[0];
+  const r = { source: "admin" };
+  if (body.result === "void") r.void = true;
+  else {
+    const hs = body.homeScore === "" || body.homeScore == null ? null : Number(body.homeScore);
+    const as = body.awayScore === "" || body.awayScore == null ? null : Number(body.awayScore);
+    if ((hs == null) !== (as == null) || (hs != null && !(Number.isFinite(hs) && Number.isFinite(as) && hs >= 0 && as >= 0))) throw new HttpError(400, "Enter both scores, or leave both empty.");
+    if (hs != null) { r.homeScore = hs; r.awayScore = as; }
+    const win = { home: b0.home, away: b0.away, draw: "Draw" }[body.result];
+    if (win) r.winner = win;
+    else if (hs == null) throw new HttpError(400, "Choose the result or enter the final score.");
+    if (r.winner && hs != null) { const byScore = hs > as ? b0.home : as > hs ? b0.away : "Draw"; if (byScore !== r.winner) throw new HttpError(400, "The result doesn't match the score."); }
+  }
+  const out = await SP.settleEvent(eventId, r, sportsHelpers);
+  return { ok: true, ...out };
+});
+setInterval(maybeAutoSettle, 20 * 60e3).unref();
 
 route("GET", "/api/health", async () => ({ ok: true, store: store.kind, email: S.emailConfigured() }));
 

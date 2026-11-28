@@ -1,7 +1,7 @@
 /* CareQuay Casino — shared payout tables (server + browser). */
 (function (root) {
   "use strict";
-  const EDGE = 0.99;
+  const EDGE = 0.97;
   const C = (n, k) => { if (k < 0 || k > n) return 0; let r = 1; for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i; return r; };
   const sig = (v) => (v >= 100 ? Math.round(v) : v >= 10 ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100);
 
@@ -19,16 +19,16 @@
     const th = p <= 2 ? 1 : p <= 4 ? 2 : p <= 7 ? 3 : 4, raw = [];
     for (let h = 0; h <= p; h++) raw.push(h < th ? 0 : Math.pow(h - th + 1, 2.2) * Math.pow(2.1, h - th));
     const e = raw.reduce((s, v, h) => s + v * P(h), 0);
-    KENO[p] = raw.map((v) => sig((v * 0.97) / e));
+    KENO[p] = raw.map((v) => sig((v * 0.95) / e));
   }
 
-  // Jacks or Better 9/6 (≈99.5% with optimal play). Multipliers are total return per unit bet.
+  // Jacks or Better 8/5 (≈97.3% with optimal play). Multipliers are total return per unit bet.
   const VIDEO_POKER = [
     { key: "royal", name: "Royal Flush", pay: 800 },
     { key: "sflush", name: "Straight Flush", pay: 50 },
     { key: "quads", name: "Four of a Kind", pay: 25 },
-    { key: "full", name: "Full House", pay: 9 },
-    { key: "flush", name: "Flush", pay: 6 },
+    { key: "full", name: "Full House", pay: 8 },
+    { key: "flush", name: "Flush", pay: 5 },
     { key: "straight", name: "Straight", pay: 4 },
     { key: "trips", name: "Three of a Kind", pay: 3 },
     { key: "twopair", name: "Two Pair", pay: 2 },

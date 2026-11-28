@@ -19,7 +19,7 @@
     id: "blackjack", name: "Blackjack", cat: "tables", tag: "Cards", navIcon: "🂡",
     art: { emoji: "🂡", bg: "linear-gradient(150deg,#2ee6a0,#0b6b48 55%,#04241a)", accent: "#2ee6a0" },
     blurb: "Beat the dealer to 21. Blackjack pays 3 to 2.",
-    rules: "<p>Six decks. Get closer to 21 than the dealer without going over. Picture cards count 10, aces 1 or 11. Blackjack pays 3:2, other wins 1:1. Double on your first two cards; split a pair once (split aces get one card each). Dealer stands on all 17s and peeks for blackjack with an ace or ten showing. Return to player about 99.5% with basic strategy.</p>",
+    rules: "<p>Six decks. Get closer to 21 than the dealer without going over. Picture cards count 10, aces 1 or 11. Blackjack pays 3:2, other wins 1:1. Double on your first two cards; split a pair once (split aces get one card each). Dealer hits soft 17 and peeks for blackjack with an ace or ten showing. Return to player about 99.4% with basic strategy.</p>",
     mount(stage) {
       const bet = betInput();
       const dealBtn = el("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "Deal");
@@ -204,7 +204,7 @@
     id: "video-poker", name: "Jacks or Better", cat: "tables", tag: "Cards", navIcon: "🎴",
     art: { emoji: "🎰", bg: "linear-gradient(150deg,#ffe36b,#2b6cff 55%,#0a1440)", accent: "#ffe36b" },
     blurb: "Video poker. Hold your best cards, draw, and hit the pay table.",
-    rules: "<p>Jacks or Better, 9/6 pay table, one 52-card deck. You're dealt five cards; tap the ones to hold, then draw replacements. Pays on a pair of Jacks or better. Return to player 99.54% with perfect strategy.</p>",
+    rules: "<p>Jacks or Better, 8/5 pay table, one 52-card deck. You're dealt five cards; tap the ones to hold, then draw replacements. Pays on a pair of Jacks or better. Return to player 97.3% with perfect strategy.</p>",
     mount(stage) {
       const bet = betInput();
       const btn = el("button", { class: "btn btn-primary btn-lg btn-block", type: "button" }, "Deal");
@@ -297,7 +297,7 @@
         spinBtn.disabled = spinning || t <= 0; [undoBtn, clearBtn, dblBtn].forEach((b) => (b.disabled = spinning || t <= 0)); rebetBtn.disabled = spinning || !lastBets || t > 0;
       }
       const clearHit = () => board.querySelectorAll(".hit").forEach((n) => n.classList.remove("hit"));
-      function place(k) { if (spinning) return; bets.set(k, Math.round(((bets.get(k) || 0) + chips.value) * 100) / 100); stack.push([k, chips.value]); clearHit(); paint(); }
+      function place(k) { if (spinning) return; window.CQSound && CQSound.play("chip"); bets.set(k, Math.round(((bets.get(k) || 0) + chips.value) * 100) / 100); stack.push([k, chips.value]); clearHit(); paint(); }
       function remove(k) { if (spinning || !bets.has(k)) return; bets.delete(k); clearHit(); paint(); }
       undoBtn.addEventListener("click", () => { const l = stack.pop(); if (!l) return; const v = Math.round(((bets.get(l[0]) || 0) - l[1]) * 100) / 100; if (v > 0) bets.set(l[0], v); else bets.delete(l[0]); paint(); });
       clearBtn.addEventListener("click", () => { bets.clear(); stack.length = 0; paint(); });
@@ -315,7 +315,9 @@
           rotEl.style.transition = "transform 4.6s cubic-bezier(.12,.6,.18,1)"; rotEl.style.transform = `rotate(${rot}deg)`;
           ballTrack.style.transition = "transform 4.6s cubic-bezier(.2,.65,.25,1)"; ballTrack.style.transform = `rotate(${ballRot}deg)`;
           wheel.classList.add("spinning"); resultEl.className = "rl-result"; resultEl.textContent = "…";
+          window.CQSound && CQSound.play("wheel", 4.4);
           await sleep(4700);
+          window.CQSound && CQSound.play("ball");
           wheel.classList.remove("spinning"); r.settle();
           resultEl.textContent = String(n); resultEl.className = `rl-result ${colorOf(n)}`;
           past.unshift(n); past.length = Math.min(past.length, 12); hist.replaceChildren(...past.map((x) => el("span", { class: colorOf(x) }, String(x))));
