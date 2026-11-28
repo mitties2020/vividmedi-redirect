@@ -138,7 +138,7 @@
     const token = new URLSearchParams(location.search).get("reset");
     const body = token && view !== "login" ? resetForm(token) : view === "register" ? registerForm() : view === "forgot" ? forgotForm() : view === "sent" ? sentView() : loginForm();
     const card = el("div", { class: "auth-card" },
-      el("div", { class: "auth-brand" }, el("span", { html: logo(54, "lga") }), el("div", {}, el("b", {}, "CareQuay"), el("small", {}, "Casino"), el("em", { class: "kyc-badge" }, "No KYC Casino"))),
+      el("div", { class: "auth-brand" }, el("span", { html: logo(54, "lga") }), el("div", {}, el("b", {}, "CareQuay"), el("small", {}, "Casino"), el("em", { class: "kyc-badge" }, "No KYC Casino"), el("em", { class: "kyc-badge gold" }, "Fast withdrawals · under 10 min"))),
       notice ? el("p", { class: `auth-notice ${notice.kind}` }, notice.text) : null,
       tabs, body);
     notice = null;

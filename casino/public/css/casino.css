@@ -802,3 +802,10 @@ body[data-mode="real"] .topbar { box-shadow: inset 0 -2px 0 rgba(245, 196, 81, .
 .foot-coins { display: flex; gap: 6px; }
 .foot-coins .coin-ico { width: 28px; height: 28px; font-size: .5rem; }
 .foot-brand .kyc-badge { margin: 0; }
+.kyc-badge.gold { border-color: rgba(245, 196, 81, .5); background: linear-gradient(90deg, rgba(245, 196, 81, .2), rgba(245, 196, 81, .06)); color: #ffe9a8; box-shadow: 0 0 14px rgba(245, 196, 81, .16); }
+.kyc-badge.gold::before { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.brand-text .kyc-badge + .kyc-badge { margin-top: 4px; }
+.auth-brand .kyc-badge { display: flex; }
+.auth-brand .kyc-badge + .kyc-badge { margin-top: 5px; }
+.foot-brand .kyc-badge + .kyc-badge { margin-left: 2px; }
+.fast-note { margin: -4px 0 14px; padding: 9px 12px; border: 1px solid rgba(245, 196, 81, .3); border-radius: 12px; background: rgba(245, 196, 81, .07); color: #ffe9a8; font-size: .82rem; font-weight: 600; }

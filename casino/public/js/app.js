@@ -42,7 +42,7 @@
     const coins = ["BTC", "ETH", "LTC", "BNB", "TRX"].map((s) => CQPages.coinIcon(s));
     return el("section", { class: "hero" },
       el("div", { class: "hero-copy" },
-        el("p", { class: "hero-kicker" }, el("span", { class: "kyc-badge big" }, "No KYC Casino"), "CareQuay crypto casino"),
+        el("p", { class: "hero-kicker" }, el("span", { class: "kyc-badge big" }, "No KYC Casino"), el("span", { class: "kyc-badge big gold" }, "Fast withdrawals"), "CareQuay crypto casino"),
         el("h1", {}, "Spin. Deal. Crash.", el("br"), el("span", {}, "Cash out in crypto.")),
         el("div", { class: "hero-cta" }, el("a", { class: "btn btn-gold", href: "#/wallet" }, "Deposit"), el("a", { class: "btn btn-ghost", href: "#/bonus" }, "20% weekly cashback")),
         el("div", { class: "accept" }, el("span", { class: "accept-label" }, "We accept"), coins)),
@@ -55,7 +55,7 @@
     const items = [
       ["🛡️", "No KYC", "Sign up with just an email"],
       ["💸", "20% cashback", "On weekly net losses, every Sunday"],
-      ["🎰", `${games.length} games`, "Slots, tables and crypto originals"],
+            ["⚡", "Fast withdrawals", "Usually processed in under 10 minutes"],
       ["🔒", "Secure RNG", "Results decided on our servers"],
     ];
     return el("section", { class: "perks" }, items.map(([i, t, s]) => el("div", { class: "perk" }, el("span", { class: "perk-icon", "aria-hidden": "true" }, i), el("div", {}, el("b", {}, t), el("small", {}, s)))));
