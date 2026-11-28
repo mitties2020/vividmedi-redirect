@@ -537,6 +537,7 @@ function serveStatic(req, res, pathname) {
   });
 }
 
+const CANON = (() => { try { if (!process.env.SITE_URL || process.env.CANONICAL_REDIRECT === "0") return null; const u = new URL(process.env.SITE_URL); return { host: u.host.toLowerCase(), origin: u.origin }; } catch { return null; } })();
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -549,6 +550,11 @@ const server = http.createServer(async (req, res) => {
   for (const [k, v] of Object.entries(SECURITY)) res.setHeader(k, v);
   if (PROD) res.setHeader("Strict-Transport-Security", "max-age=31536000");
   const url = new URL(req.url, "http://x");
+  // One public address: send visitors on other hostnames (e.g. the onrender.com one) to SITE_URL.
+  if (CANON && req.headers.host && req.headers.host.toLowerCase() !== CANON.host && (req.method === "GET" || req.method === "HEAD") && !url.pathname.startsWith("/api/") && !/^\/google[0-9a-f]+\.html$/.test(url.pathname)) {
+    res.writeHead(301, { Location: CANON.origin + url.pathname + url.search, "Cache-Control": "public, max-age=3600" });
+    return res.end();
+  }
   if (!url.pathname.startsWith("/api/")) {
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
     try {
