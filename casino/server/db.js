@@ -56,6 +56,8 @@ CREATE TABLE IF NOT EXISTS deposits (
 );
 ALTER TABLE deposits ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'credited';
 CREATE UNIQUE INDEX IF NOT EXISTS deposits_coin_txid ON deposits (coin, lower(txid)) WHERE txid IS NOT NULL;
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS units TEXT;
+CREATE INDEX IF NOT EXISTS deposits_status ON deposits (status);
 CREATE TABLE IF NOT EXISTS withdrawals (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -195,6 +197,10 @@ function pgStore(url) {
             const r = await client.query("UPDATE sports_bets SET status = $2, payout = $3, result = $4, settled_at = now() WHERE id = $1 AND user_id = $5 AND status = 'open' RETURNING id", [id, status, payout, JSON.stringify(result || {}), userId]);
             return r.rowCount === 1;
           },
+          async matchDeposit(id, txid, status, usdMicro, price) {
+            const r = await client.query("UPDATE deposits SET status = $3, txid = $2, usd = $4, price = $5 WHERE id = $1 AND user_id = $6 AND status IN ('awaiting','expired') RETURNING id", [id, txid, status, usdMicro, price, userId]);
+            return r.rowCount === 1;
+          },
           async referralReward(r) {
             const x = await client.query("INSERT INTO referral_rewards (referrer_id, user_id, week_start, net, amount) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING", [userId, r.user_id, r.week_start, r.net, r.amount]);
             return x.rowCount === 1;
@@ -224,6 +230,14 @@ function pgStore(url) {
     async cashbacks(userId) {
       const r = await q("SELECT amount, meta, created_at FROM ledger WHERE user_id = $1 AND type = 'cashback' ORDER BY id DESC LIMIT 20", [userId]);
       return r.rows.map((x) => ({ ...x, amount: num(x.amount) }));
+    },
+    depositRequests: {
+      async create(userId, d) { return num((await q("INSERT INTO deposits (user_id, coin, amount, usd, price, units, status) VALUES ($1,$2,$3,$4,$5,$6,'awaiting') RETURNING id", [userId, d.coin, d.amount, d.usd, d.price, d.units])).rows[0].id); },
+      async open() { return (await q("SELECT id, user_id, coin, amount, units, usd, price, created_at FROM deposits WHERE status = 'awaiting' ORDER BY id")).rows.map((x) => ({ ...x, id: num(x.id), user_id: num(x.user_id), usd: num(x.usd), price: num(x.price), amount: String(x.amount) })); },
+      async unconfirmed() { return (await q("SELECT id, user_id, coin, amount, txid, created_at FROM deposits WHERE status = 'unconfirmed'")).rows.map((x) => ({ ...x, id: num(x.id), user_id: num(x.user_id) })); },
+      async expire(before) { await q("UPDATE deposits SET status = 'expired' WHERE status = 'awaiting' AND created_at < $1", [before]); },
+      async get(userId, id) { const x = (await q("SELECT id, coin, amount, units, usd, price, status, txid, created_at FROM deposits WHERE id = $1 AND user_id = $2", [id, userId])).rows[0]; return x && { ...x, id: num(x.id), usd: num(x.usd), price: num(x.price), amount: String(x.amount) }; },
+      async hasUnconfirmed(userId) { return (await q("SELECT 1 FROM deposits WHERE user_id = $1 AND status = 'unconfirmed' LIMIT 1", [userId])).rowCount > 0; },
     },
     async claimDeposit(userId, { coin, amount, txid }) {
       const r = await q("INSERT INTO deposits (user_id, coin, amount, usd, price, txid, status) VALUES ($1,$2,$3,0,0,$4,'pending') ON CONFLICT DO NOTHING RETURNING id", [userId, coin, amount, txid]);
@@ -329,6 +343,7 @@ function memStore() {
           async withdrawal(row) { const w = { id: ++wid, user_id: userId, status: "pending", created_at: new Date(), ...row }; pending.withdrawals.push(w); return w.id; },
           async deposit(row) { const d = { id: ++did, user_id: userId, status: "credited", created_at: new Date(), ...row }; pending.deposits.push(d); return d.id; },
           async sumWindow(mode, from, to) { return sum(userId, mode, from, to); },
+          async matchDeposit(id, txid, status, usdMicro, price) { const d = deposits.find((x) => x.id === id && x.user_id === userId && (x.status === "awaiting" || x.status === "expired")); if (!d) return false; if (deposits.some((x) => x.coin === d.coin && x.txid && x.txid.toLowerCase() === String(txid).toLowerCase())) return false; pending.settle.push(() => Object.assign(d, { status, txid, usd: usdMicro, price })); return true; },
           async referralReward(r) { const k = `${userId}:${r.user_id}:${new Date(r.week_start).toISOString()}`; if (rrewards.has(k) || pending.rr.has(k)) return false; pending.rr.set(k, { referrer_id: userId, ...r, week_start: new Date(r.week_start), created_at: new Date() }); return true; },
           async sportsBet(b) { const row = { id: ++sid, user_id: userId, status: "open", payout: 0, result: null, created_at: new Date(), settled_at: null, ...b, commence_time: new Date(b.commence_time) }; pending.sbets.push(row); return row.id; },
           async settleSportsBet(id, status, payout, result) { const b = sbets.find((x) => x.id === id && x.user_id === userId && x.status === "open"); if (!b) return false; pending.settle.push(() => Object.assign(b, { status, payout, result, settled_at: new Date() })); return true; },
@@ -344,6 +359,14 @@ function memStore() {
     async sumWindow(userId, mode, from, to) { return sum(userId, mode, from, to); },
     async history(userId, limit = 30) { return ledger.filter((l) => l.user_id === userId).slice(-limit).reverse(); },
     async cashbacks(userId) { return ledger.filter((l) => l.user_id === userId && l.type === "cashback").slice(-20).reverse(); },
+    depositRequests: {
+      async create(userId, d) { const row = { id: ++did, user_id: userId, status: "awaiting", txid: null, created_at: new Date(), ...d }; deposits.push(row); return row.id; },
+      async open() { return deposits.filter((d) => d.status === "awaiting").map((d) => ({ ...d })); },
+      async unconfirmed() { return deposits.filter((d) => d.status === "unconfirmed").map((d) => ({ ...d })); },
+      async expire(before) { deposits.forEach((d) => { if (d.status === "awaiting" && d.created_at < before) d.status = "expired"; }); },
+      async get(userId, id) { const d = deposits.find((x) => x.id === id && x.user_id === userId); return d && { ...d }; },
+      async hasUnconfirmed(userId) { return deposits.some((d) => d.user_id === userId && d.status === "unconfirmed"); },
+    },
     async claimDeposit(userId, { coin, amount, txid }) {
       const d = { id: ++did, user_id: userId, coin, amount, usd: 0, price: 0, txid, status: "pending", created_at: new Date() }; deposits.push(d); return d.id;
     },

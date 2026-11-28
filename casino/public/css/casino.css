@@ -978,3 +978,19 @@ body[data-mode="real"] .topbar { box-shadow: inset 0 -2px 0 rgba(245, 196, 81, .
 .faq-foot { margin-top: 10px; }
 .btn-tg { background: linear-gradient(180deg, #3bb8f3, #1f8fd3); color: #fff; border: 0; }
 .btn-tg:hover { filter: brightness(1.08); }
+
+/* ---------- Auto-detected deposits ---------- */
+.dep-form { display: grid; gap: 10px; }
+.dep-form .sb-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.addr-box.exact { border-style: solid; border-color: rgba(245, 196, 81, .45); background: rgba(245, 196, 81, .06); }
+.addr-row code.big-amt { font-size: 1.35rem; font-weight: 800; color: var(--gold); letter-spacing: .02em; }
+.dep-status { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--panel-2, var(--bg)); }
+.dep-status b { display: block; }
+.dep-status small { color: var(--dim); font-size: .78rem; }
+.dep-status.ok { border-color: rgba(70, 214, 140, .5); background: rgba(70, 214, 140, .08); animation: dep-pop .45s ease; }
+.dep-status.err { border-color: rgba(255, 93, 108, .45); background: rgba(255, 93, 108, .07); }
+.dep-status .spinner { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(94, 230, 210, .25); border-top-color: var(--teal); animation: spin-flat .9s linear infinite; }
+.dep-tick { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #46d68c; color: #06231a; font-weight: 900; }
+.dep-new { justify-self: start; font-size: .82rem; }
+@keyframes dep-pop { 0% { transform: scale(.97); } 60% { transform: scale(1.02); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .dep-status.ok, .dep-status .spinner { animation: none; } }

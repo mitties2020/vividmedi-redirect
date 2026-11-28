@@ -60,24 +60,72 @@
       wdBtn.disabled = false;
     });
 
-    function pickDeposit(c) {
+    let activeReq = null, reqTimer = 0, lockTimer = 0;
+    const stopReq = () => { clearInterval(reqTimer); clearInterval(lockTimer); reqTimer = lockTimer = 0; };
+    const copyable = (text, cls = "addr") => {
+      const code = el("code", { class: cls }, text);
+      const b = el("button", { type: "button", class: "btn btn-ghost btn-sm" }, "Copy");
+      b.addEventListener("click", async () => { try { await navigator.clipboard.writeText(text); b.textContent = "Copied ✓"; setTimeout(() => (b.textContent = "Copy"), 1500); } catch { const r = document.createRange(); r.selectNodeContents(code); getSelection().removeAllRanges(); getSelection().addRange(r); b.textContent = "Selected — press Ctrl+C"; } });
+      return el("div", { class: "addr-row" }, code, b);
+    };
+    function pickDeposit(c, force) {
+      if (activeReq && !force && activeReq.coin === c.sym) return;
+      if (activeReq && activeReq.coin !== c.sym) { stopReq(); activeReq = null; }
       selected = c.sym;
       CQ.$$(".coin-card", coinGrid).forEach((b) => b.classList.toggle("on", b.dataset.sym === c.sym));
-      const net = c.nets[0];
       if (!c.address) {
         depositPanel.replaceChildren(el("div", { class: "dep-head" }, coinIcon(c.sym), el("div", {}, el("h3", {}, `Deposit ${c.name}`))), el("div", { class: "addr-box soon" }, el("b", {}, "Deposit address coming soon"), el("span", {}, `${c.sym} deposits will open here shortly.`)));
         return;
       }
-      const copyBtn = el("button", { type: "button", class: "btn btn-ghost btn-sm" }, "Copy");
-      copyBtn.addEventListener("click", async () => { try { await navigator.clipboard.writeText(c.address); copyBtn.textContent = "Copied ✓"; } catch { const r = document.createRange(); r.selectNodeContents(addrText); getSelection().removeAllRanges(); getSelection().addRange(r); copyBtn.textContent = "Selected — press Ctrl+C"; } setTimeout(() => (copyBtn.textContent = "Copy"), 2500); });
-      const addrText = el("code", { class: "addr" }, c.address);
+      const amt = el("input", { class: "bet-input", type: "number", min: "5", step: "1", placeholder: "50", inputmode: "decimal", "aria-label": "Deposit amount in US dollars" });
+      const conv = el("p", { class: "wd-est" }, `Minimum $5 · 1 ${c.sym} = ${fmtPrice(c.usd)}`);
+      const msg = el("p", { class: "auth-msg", role: "alert" });
+      const go = el("button", { type: "submit", class: "btn btn-gold btn-lg btn-block" }, "Get my deposit amount");
+      const upd = () => { const v = Number(amt.value); conv.textContent = v > 0 ? `≈ ${fmtCrypto(v / c.usd)} ${c.sym} · minimum $5` : `Minimum $5 · 1 ${c.sym} = ${fmtPrice(c.usd)}`; };
+      amt.addEventListener("input", upd);
+      const form = el("form", { class: "dep-form", novalidate: true },
+        el("label", { class: "field" }, el("span", { class: "field-label" }, "How much do you want to deposit? (USD)"), el("div", { class: "bet-row" }, el("span", { class: "coin-glyph" }, "$"), amt)),
+        el("div", { class: "sb-quick" }, [20, 50, 100, 250, 500].map((v) => el("button", { type: "button", class: "chip-btn", onclick: () => { amt.value = v; upd(); } }, `$${v}`))),
+        conv, msg, go);
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault(); msg.textContent = ""; go.disabled = true;
+        try { const r = await api("/api/deposit/start", { coin: c.sym, usd: Number(amt.value) }); showRequest(c, r); }
+        catch (err) { msg.className = "auth-msg error"; msg.textContent = err.message; go.disabled = false; }
+      });
       depositPanel.replaceChildren(
-        el("div", { class: "dep-head" }, coinIcon(c.sym), el("div", {}, el("h3", {}, `Deposit ${c.name}`), el("p", { class: "muted" }, `1 ${c.sym} = ${fmtPrice(c.usd)}`))),
-        el("div", { class: "addr-box" }, el("small", {}, `Your ${c.sym} deposit address · ${net}`), el("div", { class: "addr-row" }, addrText, copyBtn), el("span", { class: "addr-warn" }, `Send only ${c.sym} on the ${net} network to this address.`)),
+        el("div", { class: "dep-head" }, coinIcon(c.sym), el("div", {}, el("h3", {}, `Deposit ${c.name}`), el("p", { class: "muted" }, `${c.nets[0]} · credited automatically`))),
+        form,
         el("ul", { class: "dep-notes" },
-          el("li", {}, "Deposits are credited to your balance in US dollars at the live rate once received."),
-          el("li", {}, "Each deposit must be wagered at least 1× before it can be withdrawn."),
-          el("li", {}, "Sending any other coin or network to this address may result in permanent loss.")));
+          el("li", {}, "You'll get an exact amount to send. We spot it on the blockchain within seconds and add it to your balance — no confirmations to wait for."),
+          el("li", {}, "Withdrawals unlock once your deposit has 1 confirmation, and each deposit must be wagered 1×."),
+          el("li", {}, "Sent crypto without starting a deposit here? Email support@carequay.com with your account email and the transaction ID.")));
+    }
+    function showRequest(c, r) {
+      stopReq();
+      activeReq = { ...r, coin: c.sym };
+      const status = el("div", { class: "dep-status wait" }, el("span", { class: "spinner" }), el("div", {}, el("b", {}, "Waiting for your transaction…"), el("small", {}, "This updates by itself — keep this page open or come back later.")));
+      const lock = el("small", { class: "muted" });
+      const lockedUntil = new Date(r.lockedUntil).getTime();
+      const tickLock = () => { const ms = lockedUntil - Date.now(); lock.textContent = ms > 0 ? `Rate locked at ${fmtPrice(r.price)} for ${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}. After that it's credited at the live rate.` : "Rate lock ended — your deposit will be credited at the live rate when it arrives."; };
+      tickLock(); lockTimer = setInterval(tickLock, 1000);
+      depositPanel.replaceChildren(
+        el("div", { class: "dep-head" }, coinIcon(c.sym), el("div", {}, el("h3", {}, `Send exactly ${r.amount} ${c.sym}`), el("p", { class: "muted" }, `≈ ${fmtUSD(r.usd)} · ${r.network}`))),
+        el("div", { class: "addr-box exact" }, el("small", {}, "1. Amount — send this exact amount"), copyable(r.amount, "addr big-amt")),
+        el("div", { class: "addr-box" }, el("small", {}, `2. To this ${c.sym} address · ${r.network}`), copyable(r.address), el("span", { class: "addr-warn" }, `Send only ${c.sym} on the ${r.network} network. If your exchange takes its fee out of the amount, add the fee on top so exactly ${r.amount} arrives.`)),
+        status, lock,
+        el("button", { type: "button", class: "auth-inline dep-new", onclick: () => { stopReq(); activeReq = null; pickDeposit(c, true); } }, "Start a different deposit"));
+      const poll = async () => {
+        try {
+          const d = await api(`/api/deposit/${r.id}`);
+          if (d.status === "credited" || d.status === "unconfirmed") {
+            stopReq(); activeReq = null;
+            status.className = "dep-status ok";
+            status.replaceChildren(el("span", { class: "dep-tick" }, "✓"), el("div", {}, el("b", {}, `${fmtUSD(d.usd)} added to your balance`), el("small", {}, d.status === "unconfirmed" ? "You can play now. Withdrawals unlock once it has 1 confirmation." : "Confirmed — you're all set.")));
+            lock.textContent = ""; loadHistory(); window.CQSound && CQSound.play("win");
+          } else if (d.status === "expired") { stopReq(); status.className = "dep-status err"; status.replaceChildren(el("div", {}, el("b", {}, "This deposit request expired"), el("small", {}, "If you sent it, email support@carequay.com with the transaction ID."))); }
+        } catch { /* keep polling */ }
+      };
+      reqTimer = setInterval(poll, 6000); poll();
     }
 
     async function loadPrices() {
@@ -89,16 +137,18 @@
           el("span", { class: "cc-name" }, el("b", {}, c.sym), el("small", {}, c.name)),
           el("span", { class: "cc-price" }, el("b", {}, fmtPrice(c.usd)), el("small", { class: c.change24h >= 0 ? "up" : "down" }, c.change24h == null ? "" : `${c.change24h >= 0 ? "▲" : "▼"} ${Math.abs(c.change24h).toFixed(2)}%`)))));
         if (!wdCoin.options.length) { wdCoin.replaceChildren(...coins.map((c) => el("option", { value: c.sym }, `${c.sym} — ${c.name}`))); fillNets(); }
-        if (!selected) pickDeposit(coins[0]); else pickDeposit(coins.find((c) => c.sym === selected));
+        if (!selected) pickDeposit(coins[0]); else if (!activeReq) pickDeposit(coins.find((c) => c.sym === selected));
         est();
       } catch (err) { coinGrid.replaceChildren(el("p", { class: "muted" }, err.message)); }
     }
     async function loadHistory() {
       try {
         const w = await api("/api/wallet");
+        const open = !activeReq && w.deposits.find((d) => d.status === "awaiting" && Date.now() - new Date(d.created_at).getTime() < 3600e3);
+        if (open && coins.length) { const c = coins.find((x) => x.sym === open.coin); if (c) { selected = c.sym; CQ.$$(".coin-card", coinGrid).forEach((b) => b.classList.toggle("on", b.dataset.sym === c.sym)); showRequest(c, { id: open.id, amount: Number(open.amount).toFixed(c.sym === "TRX" ? 6 : 8), usd: open.usd, price: open.price, address: c.address, network: c.nets[0], lockedUntil: new Date(new Date(open.created_at).getTime() + 3600e3).toISOString() }); } }
         minWithdraw = w.minWithdraw; if (w.dailyMax) dailyMax = w.dailyMax; if (w.dailyLeft != null) dailyLeft = w.dailyLeft; est();
         const table = (rows, cols, empty) => el("table", { class: "bets-table" }, el("thead", {}, el("tr", {}, cols.map((c) => el("th", { class: c.num ? "num" : "" }, c.h)))), el("tbody", {}, rows.length ? rows.map((r) => el("tr", {}, cols.map((c) => el("td", { class: c.num ? "num" : "" }, c.v(r))))) : el("tr", {}, el("td", { colspan: String(cols.length), class: "empty" }, empty))));
-        histDep.replaceChildren(table(w.deposits, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => r.coin }, { h: "Amount", num: 1, v: (r) => `${fmtCrypto(r.amount)} ${r.coin}` }, { h: "Credited", num: 1, v: (r) => (r.status === "credited" ? fmtUSD(r.usd) : "–") }, { h: "Status", v: (r) => el("span", { class: `status st-${r.status === "credited" ? "paid" : r.status === "processing" ? "pending" : r.status}` }, r.status === "credited" ? "credited" : r.status === "processing" ? "pending" : r.status) }], "No deposits yet"));
+        histDep.replaceChildren(table(w.deposits, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => r.coin }, { h: "Amount", num: 1, v: (r) => `${fmtCrypto(r.amount)} ${r.coin}` }, { h: "Credited", num: 1, v: (r) => (r.status === "credited" || r.status === "unconfirmed" ? fmtUSD(r.usd) : "–") }, { h: "Status", v: (r) => { const m = { credited: ["paid", "credited"], unconfirmed: ["paid", "credited · confirming"], awaiting: ["pending", "waiting"], processing: ["pending", "pending"], expired: ["rejected", "expired"] }[r.status] || [r.status, r.status]; return el("span", { class: `status st-${m[0]}` }, m[1]); } }], "No deposits yet"));
         histWd.replaceChildren(table(w.withdrawals, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => `${r.coin}${r.network ? ` · ${r.network}` : ""}` }, { h: "Address", v: (r) => `${r.address.slice(0, 8)}…${r.address.slice(-6)}` }, { h: "Amount", num: 1, v: (r) => `${fmtUSD(r.usd)} (${fmtCrypto(r.crypto_amount)} ${r.coin})` }, { h: "Status", v: (r) => el("span", { class: `status st-${r.status}` }, r.status) }], "No withdrawals yet"));
       } catch (e) { fail(e); }
     }
@@ -113,9 +163,9 @@
         el("div", { class: "panel" }, el("h2", {}, "Withdraw"), el("p", { class: "fast-note" }, "⚡ Fast withdrawals, usually processed in under 10 minutes."), wdForm)),
       el("section", { class: "panel" }, el("h2", {}, "Withdrawals"), histWd),
       el("section", { class: "panel" }, el("h2", {}, "Deposits"), histDep));
-    loadPrices(); loadHistory();
+    loadPrices().then(() => loadHistory());
     const t = setInterval(loadPrices, 60000);
-    return () => { clearInterval(t); off(); };
+    return () => { clearInterval(t); stopReq(); off(); };
   }
 
   /* ================= BONUSES ================= */

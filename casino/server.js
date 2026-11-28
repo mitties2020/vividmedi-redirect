@@ -10,6 +10,7 @@ const T = require("./public/js/shared/tables.js");
 const createSports = require("./server/sports");
 const createSite = require("./server/site");
 const createTelegram = require("./server/telegram");
+const createChain = require("./server/chain");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC = path.join(__dirname, "public");
@@ -238,6 +239,7 @@ route("POST", "/api/withdraw", async ({ req, body }) => {
   const price = (await S.prices()).find((p) => p.sym === coin.sym).usd;
   return store.tx(u.id, async (acct, ops) => {
     await settleCashback(acct, ops);
+    if (await store.depositRequests.hasUnconfirmed(u.id)) throw new HttpError(400, "One of your deposits is still waiting for its first blockchain confirmation. You can withdraw once it confirms — usually within a few minutes.");
     if (acct.wager_remaining > 0) throw new HttpError(400, `Your deposits must be wagered 1× before withdrawing. $${usd(acct.wager_remaining).toFixed(2)} left to wager.`);
     if (acct.real_balance < amt) throw new HttpError(400, "That's more than your real balance.");
     const left = DAILY_WITHDRAW * MICRO - (await withdrawnLast24h(u.id));
@@ -548,6 +550,43 @@ route("GET", "/api/referral", async ({ req }) => {
   return { code, link: `${base}/r/${code}`, rate: REFERRAL_RATE, invited: st.invited, earned: usdx(st.earned), weeks: st.recent.map((x) => ({ week: x.week_start, amount: usdx(x.amount), players: x.players })), nextPayout: S.nextBoundary(new Date()).toISOString() };
 });
 
+/* ---------- Automatic deposits (watch the blockchain for each request's exact amount) ---------- */
+async function creditDeposit(claim, { txid, confirmed }) {
+  let price = Number(claim.price);
+  if (Date.now() - new Date(claim.created_at).getTime() > CH.RATE_LOCK) { const p = (await S.prices().catch(() => [])).find((x) => x.sym === claim.coin); if (p && p.usd) price = p.usd; }
+  const micro = Math.floor(Number(claim.amount) * price * 100) * 10000;
+  let done = false, email = "";
+  await store.tx(claim.user_id, async (acct, ops) => {
+    if (!(await ops.matchDeposit(claim.id, txid, confirmed ? "credited" : "unconfirmed", micro, price))) return;
+    acct.real_balance += micro; acct.wager_remaining += micro;
+    await ops.ledger({ mode: "real", type: "deposit", amount: micro, meta: { id: claim.id, coin: claim.coin, amount: claim.amount, txid, auto: true } });
+    done = true;
+  });
+  if (done) {
+    const u = await store.users.byId(claim.user_id).catch(() => null); email = u ? u.email : `user ${claim.user_id}`;
+    TG.notify(claim.user_id, `💰 <b>Deposit received</b>\n${claim.amount} ${claim.coin} → ${TG.money(usd(micro))} added to your real balance.${confirmed ? "" : "\n<i>Withdrawals unlock once it has 1 confirmation.</i>"}`).catch(() => {});
+    TG.alertAdmin(null, `💰 <b>Deposit detected</b> — credited automatically\n${TG.esc(email)}: ${claim.amount} ${claim.coin} (${TG.money(usd(micro))})${confirmed ? "" : " · unconfirmed"}\n<code>${TG.esc(txid)}</code>`).catch(() => {});
+  }
+  return done;
+}
+const CH = createChain({
+  store, onCredit: creditDeposit,
+  onUnmatched: (x) => TG.alertAdmin(null, `⚠️ <b>Deposit with no matching request</b>\n${x.amount} ${x.coin} arrived${x.confirmed ? "" : " (unconfirmed)"} but didn't match any player's deposit amount.\n<code>${TG.esc(x.txid)}</code>\nIf you know who sent it, credit them in the admin page.`).catch(() => {}),
+  onStale: (d, seen) => TG.alertAdmin(null, `⏳ <b>Deposit still unconfirmed after 6 hours</b>\n#${d.id}: ${d.amount} ${d.coin}${seen ? "" : " — the transaction is no longer visible, it may have been replaced or cancelled"}\n<code>${TG.esc(d.txid)}</code>\nThe player's withdrawals stay locked until it confirms.`).catch(() => {}),
+});
+route("POST", "/api/deposit/start", async ({ req, body }) => {
+  const u = await requireUser(req);
+  try { return { ok: true, ...(await CH.start(u.id, body.coin, Math.round(Number(body.usd) * 100) / 100)) }; }
+  catch (e) { throw new HttpError(e.status || 500, e.message); }
+});
+route("GET", "/api/deposit/:id", async ({ req, params }) => {
+  const u = await requireUser(req);
+  const d = await store.depositRequests.get(u.id, Number(params.id));
+  if (!d) throw new HttpError(404, "Deposit not found.");
+  CH.tick(false).catch(() => {});
+  return { id: d.id, coin: d.coin, amount: d.amount, status: d.status, usd: usd(d.usd), txid: d.txid, created: d.created_at, ...(d.status === "credited" || d.status === "unconfirmed" ? balances(await store.users.byId(u.id)) : {}) };
+});
+
 /* ---------- Owner alerts: real play, visitors ---------- */
 const realPlayToday = new Set();
 function noteRealPlay(u, game, stake) {
@@ -599,9 +638,11 @@ route("GET", "/api/telegram/link", async ({ req }) => {
 /* Background jobs. Also reachable at /api/cron?key=CRON_KEY so an outside pinger can run them (and keep the free server awake). */
 async function runJobs() {
   maybeAutoSettle(); maybeSettleReferrals();
+  CH.tick(false).catch((e) => console.error("chain:", e.message));
   await TG.tick().catch((e) => console.error("telegram tick:", e.message));
 }
 setInterval(runJobs, 5 * 60e3).unref();
+setInterval(() => CH.tick(false).catch(() => {}), 15e3).unref();
 route("GET", "/api/cron", async ({ url }) => {
   const k = process.env.CRON_KEY;
   if (!k || url.searchParams.get("key") !== k) throw new HttpError(404, "Not found.");

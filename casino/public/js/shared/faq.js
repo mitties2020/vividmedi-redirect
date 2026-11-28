@@ -11,8 +11,8 @@
     ] },
     { cat: "Deposits", icon: "🪙", items: [
       ["Which cryptocurrencies can I use?", "Bitcoin (BTC), Ethereum (ETH on the Ethereum network), Litecoin (LTC), BNB on BNB Smart Chain, and TRON (TRX)."],
-      ["How do I deposit?", "Log in, open Wallet, choose a coin and copy your deposit address. Send the coin from your own wallet or exchange using the network shown. Your deposit is added to your real balance in US dollars at the live rate once it's received."],
-      ["How long does a deposit take?", "It depends on the blockchain. TRON and Litecoin usually arrive within minutes; Bitcoin can take 10–60 minutes depending on network fees. You'll see it in your Wallet once it's credited, and you'll get a Telegram alert if you've connected the bot."],
+      ["How do I deposit?", "Log in, open Wallet, choose a coin and enter how much you want to deposit in US dollars. You'll be shown an exact amount and the address to send it to. Send that exact amount from your own wallet or exchange using the network shown, and it's added to your real balance automatically."],
+      ["How long does a deposit take?", "Seconds. We watch the blockchain and credit your deposit as soon as your transaction appears on the network, before it confirms, so you can start playing straight away. Withdrawals unlock once it has 1 confirmation (minutes on TRON and Litecoin, usually 10–60 minutes on Bitcoin). The Wallet updates by itself, and you'll get a Telegram alert if you've connected the bot."],
       ["What if I send the wrong coin or use the wrong network?", "Coins sent on the wrong network or to the wrong address usually can't be recovered. Always check the coin and network before sending, and copy the address rather than typing it."],
       ["Why is my balance in US dollars?", "So you always know what you're playing with. Deposits are converted at the live market rate when they're credited, and withdrawals are converted back at the live rate when you request them."],
     ] },

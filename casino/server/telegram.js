@@ -237,7 +237,7 @@ module.exports = function createTelegram({ store, SP }) {
         return send(chat, `👛 <b>Your balances</b>\nReal: <b>${money(user.real_balance / 1e6)}</b>\nFun: ${money(user.fun_balance / 1e6)}${user.wager_remaining > 0 ? `\nStill to wager before withdrawing: ${money(user.wager_remaining / 1e6)}` : ""}`, kb([btn("Open wallet", `${SITE()}/#/wallet`)]));
       }
       case "/deposit":
-        return send(chat, `🪙 <b>Deposit crypto</b>\n\nLog in, open <b>Wallet</b>, pick a coin and copy your deposit address. Guides:\n${[["Bitcoin", "bitcoin"], ["Ethereum", "ethereum"], ["Litecoin", "litecoin"], ["BNB", "bnb"], ["TRON", "tron"]].map(([n, s]) => `• <a href="${SITE()}/deposit/${s}">${n}</a>`).join("\n")}\n\nOnly send each coin on the network shown in the wallet.`);
+        return send(chat, `🪙 <b>Deposit crypto</b>\n\nLog in, open <b>Wallet</b>, pick a coin and enter an amount — it's credited automatically within seconds of you sending. Guides:\n${[["Bitcoin", "bitcoin"], ["Ethereum", "ethereum"], ["Litecoin", "litecoin"], ["BNB", "bnb"], ["TRON", "tron"]].map(([n, s]) => `• <a href="${SITE()}/deposit/${s}">${n}</a>`).join("\n")}\n\nOnly send each coin on the network shown in the wallet.`);
       case "/share":
         await send(chat, `👇 <b>Forward this to friends or groups.</b> ${user ? "Anyone who signs up through it earns you 10% of their weekly net losses." : "Connect your account on the Invite page first so sign-ups count for you."}\n\nTip: in any chat, type <code>@${botName}</code> and pick a card to share today's odds with your link.`);
         return send(chat, inviteText(), shareKb(user));

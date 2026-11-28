@@ -210,13 +210,13 @@ ${prose([["How earnings are worked out", "For each friend, we add up their real-
       desc: `Step-by-step guide to depositing ${c.name} (${sym}) at CareQuay Casino on the ${c.nets[0]} network — no KYC, credited in US dollars at the live rate.`,
       body: `<section class="s-wrap s-howto"><ol>${[
         ["Create your account", "Sign up with your email and a password — no ID needed."],
-        ["Open the Wallet", `Go to Wallet and choose <b>${c.name} (${sym})</b>. Your deposit address is shown with a Copy button.`],
-        ["Send from your wallet or exchange", `In your own wallet or exchange, withdraw ${sym} to that address using the <b>${esc(c.nets[0])}</b> network. Double-check the first and last few characters of the address after pasting.`],
-        ["Wait for it to arrive", `Your deposit is credited to your balance in US dollars at the live ${sym} rate once it's received. ${COIN_TIPS[sym]}`],
+        ["Open the Wallet", `Go to Wallet, choose <b>${c.name} (${sym})</b> and enter how much you want to deposit in US dollars. You'll get an exact ${sym} amount and the address to send it to.`],
+        ["Send from your wallet or exchange", `In your own wallet or exchange, send exactly that amount of ${sym} to that address using the <b>${esc(c.nets[0])}</b> network. Double-check the first and last few characters of the address after pasting.`],
+        ["It's credited automatically", `We spot your transaction on the blockchain within seconds and add it to your balance in US dollars automatically. ${COIN_TIPS[sym]}`],
         ["Play", "Deposits need to be wagered once (1×) before you can withdraw them. Then withdraw back to any of the five supported coins."],
       ].map(([t, d]) => `<li><b>${t}</b><p>${d}</p></li>`).join("")}</ol></section>
 ${prose([["Important", `Only send ${sym} on the ${esc(c.nets[0])} network to your ${sym} deposit address. Coins sent on a different network or to the wrong address can't be recovered.`], ["Other ways to deposit", Object.entries(COIN_SLUG).filter(([s2]) => s2 !== slug).map(([s2, sy]) => `<a href="/deposit/${s2}">${S.COINS.find((x) => x.sym === sy).name}</a>`).join(" · ")]])}`,
-      ld: [{ "@context": "https://schema.org", "@type": "HowTo", name: `How to deposit ${c.name} at CareQuay Casino`, step: ["Create your account", "Open the Wallet", `Send ${sym} on ${c.nets[0]}`, "Wait for it to arrive", "Play"].map((t, i) => ({ "@type": "HowToStep", position: i + 1, name: t })) }] });
+      ld: [{ "@context": "https://schema.org", "@type": "HowTo", name: `How to deposit ${c.name} at CareQuay Casino`, step: ["Create your account", "Open the Wallet", `Send ${sym} on ${c.nets[0]}`, "It's credited automatically", "Play"].map((t, i) => ({ "@type": "HowToStep", position: i + 1, name: t })) }] });
   }
 
   P["/faq"] = async (req, user) => page(req, { path: "/faq", user, title: "FAQ — Deposits, Withdrawals, Cashback & Sports", h1: "Frequently asked questions", kicker: "Help", crumbs: [{ name: "FAQ", path: "/faq" }],
