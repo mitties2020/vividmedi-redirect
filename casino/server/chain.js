@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const S = require("./support");
 
 const CFG = {
-  BTC: { dec: 8, show: 8, kind: "esplora", base: "https://mempool.space/api" },
+  BTC: { dec: 8, show: 8, kind: "esplora", base: "https://mempool.space/api", alt: ["https://blockstream.info/api", "https://mempool.emzy.de/api"] },
   LTC: { dec: 8, show: 8, kind: "esplora", base: "https://litecoinspace.org/api" },
   ETH: { dec: 18, show: 8, kind: "blockscout", base: "https://eth.blockscout.com/api/v2" },
   BNB: { dec: 18, show: 8, kind: "evmBalance", rpc: ["https://bsc-dataseed.binance.org/", "https://bsc-dataseed1.defibit.io/", "https://bsc-dataseed1.ninicoin.io/"] },
@@ -63,7 +63,11 @@ async function getJson(url, opts) {
 async function incoming(coin, addr) {
   const c = CFG[coin];
   if (c.kind === "esplora") {
-    const txs = await getJson(`${c.base}/address/${addr}/txs`);
+    let txs, last;
+    for (const base of [c.base, ...(c.alt || [])]) {
+      try { txs = await getJson(`${base}/address/${addr}/txs`); break; } catch (e) { last = e; }
+    }
+    if (!txs) throw last;
     return txs.map((tx) => {
       const sum = tx.vout.filter((o) => o.scriptpubkey_address === addr).reduce((s, o) => s + BigInt(o.value), 0n);
       const fromSelf = (tx.vin || []).some((i) => i.prevout && i.prevout.scriptpubkey_address === addr);
@@ -176,7 +180,7 @@ module.exports = function createChain({ store, onCredit, onUnmatched, onStale })
     try {
       await store.depositRequests.expire(new Date(Date.now() - CLAIM_TTL));
       for (const coin of Object.keys(CFG)) {
-        try { await scanCoin(coin, open, unconfirmed); } catch (e) { console.error(`chain ${coin}:`, e.message); }
+        try { await scanCoin(coin, open, unconfirmed); } catch (e) { console.error(`chain ${coin}:`, e.message, e.cause ? String(e.cause.code || e.cause.message || e.cause) : ""); }
       }
     } finally { running = false; }
   }
