@@ -106,6 +106,15 @@ CREATE TABLE IF NOT EXISTS referral_rewards (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (referrer_id, user_id, week_start)
 );
+CREATE TABLE IF NOT EXISTS visits (
+  id BIGSERIAL PRIMARY KEY,
+  at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  visitor TEXT NOT NULL,
+  path TEXT NOT NULL,
+  ref TEXT
+);
+CREATE INDEX IF NOT EXISTS visits_at ON visits (at);
+CREATE INDEX IF NOT EXISTS visits_visitor ON visits (visitor, at);
 CREATE TABLE IF NOT EXISTS kv (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
@@ -245,6 +254,20 @@ function pgStore(url) {
         return { invited, earned, recent };
       },
     },
+    visits: {
+      async add(v) { await q("INSERT INTO visits (visitor, path, ref) VALUES ($1, $2, $3)", [v.visitor, v.path, v.ref || null]); },
+      async seen(visitor, since) { return (await q("SELECT 1 FROM visits WHERE visitor = $1 AND at >= $2 LIMIT 1", [visitor, since])).rowCount > 0; },
+    },
+    async stats(from, to) {
+      const one = async (sql, args) => (await q(sql, args)).rows[0];
+      const u = await one("SELECT COUNT(*) AS n FROM users WHERE created_at >= $1 AND created_at < $2", [from, to]);
+      const l = await one("SELECT COALESCE(SUM(CASE WHEN type='bet' THEN amount END),0) AS bets, COALESCE(SUM(CASE WHEN type='win' THEN amount END),0) AS wins, COALESCE(SUM(CASE WHEN type='deposit' THEN amount END),0) AS deposits, COALESCE(SUM(CASE WHEN type='withdraw' THEN amount END),0) AS withdrawals, COUNT(DISTINCT CASE WHEN type='bet' THEN user_id END) AS players FROM ledger WHERE mode='real' AND created_at >= $1 AND created_at < $2", [from, to]);
+      const fp = await one("SELECT COUNT(DISTINCT user_id) AS n FROM ledger WHERE mode='fun' AND type='bet' AND created_at >= $1 AND created_at < $2", [from, to]);
+      const v = await one("SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM visits WHERE at >= $1 AND at < $2", [from, to]);
+      const pages = (await q("SELECT path, COUNT(*) AS n FROM visits WHERE at >= $1 AND at < $2 GROUP BY path ORDER BY n DESC LIMIT 5", [from, to])).rows.map((r) => [r.path, num(r.n)]);
+      const refs = (await q("SELECT ref, COUNT(DISTINCT visitor) AS n FROM visits WHERE at >= $1 AND at < $2 AND ref IS NOT NULL GROUP BY ref ORDER BY n DESC LIMIT 5", [from, to])).rows.map((r) => [r.ref, num(r.n)]);
+      return { signups: num(u.n), bets: num(l.bets), wins: num(l.wins), deposits: num(l.deposits), withdrawals: num(l.withdrawals), realPlayers: num(l.players), funPlayers: num(fp.n), views: num(v.views), visitors: num(v.visitors), pages, refs };
+    },
     async kvGet(key) { const r = await q("SELECT value FROM kv WHERE key = $1", [key]); return r.rows[0] ? r.rows[0].value : null; },
     async kvSet(key, value) { await q("INSERT INTO kv (key, value, updated_at) VALUES ($1, $2, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()", [key, JSON.stringify(value)]); },
     async setWithdrawal(id, status, txid) { await q("UPDATE withdrawals SET status = $2, txid = COALESCE($3, txid), updated_at = now() WHERE id = $1", [id, status, txid || null]); },
@@ -254,7 +277,7 @@ function pgStore(url) {
 /* ---------------- In-memory (local testing) ---------------- */
 function memStore() {
   const users = new Map(), byEmail = new Map(), tokens = new Map(), sessions = new Map();
-  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [], sbets = [], kv = new Map(), rrewards = new Map();
+  const ledger = [], gstate = new Map(), deposits = [], withdrawals = [], sbets = [], kv = new Map(), rrewards = new Map(), visits = [];
   let uid = 0, lid = 0, did = 0, wid = 0, sid = 0;
   const locks = new Map();
   const lock = (id) => { const prev = locks.get(id) || Promise.resolve(); let release; const next = new Promise((r) => (release = r)); locks.set(id, prev.then(() => next)); return prev.then(() => release); };
@@ -349,6 +372,18 @@ function memStore() {
         const byWeek = new Map(); for (const r of rs) { const k = r.week_start.toISOString(); const e = byWeek.get(k) || { week_start: r.week_start, amount: 0, players: 0 }; e.amount += r.amount; e.players++; byWeek.set(k, e); }
         return { invited: [...users.values()].filter((u) => u.referred_by === referrerId).length, earned: rs.reduce((s, r) => s + r.amount, 0), recent: [...byWeek.values()].sort((a, b) => b.week_start - a.week_start).slice(0, 12) };
       },
+    },
+    visits: {
+      async add(v) { visits.push({ ...v, at: new Date() }); },
+      async seen(visitor, since) { return visits.some((x) => x.visitor === visitor && x.at >= since); },
+    },
+    async stats(from, to) {
+      const inR = (d) => d >= from && d < to;
+      const L = ledger.filter((l) => inR(l.created_at));
+      const sum = (t, m = "real") => L.filter((l) => l.type === t && l.mode === m).reduce((s, l) => s + l.amount, 0);
+      const V = visits.filter((x) => inR(x.at));
+      const top = (arr, key, uniq) => { const m = new Map(); for (const x of arr) { if (!x[key]) continue; const e = m.get(x[key]) || new Set(); e.add(uniq ? x.visitor : Math.random()); m.set(x[key], e); } return [...m].map(([k, s]) => [k, s.size]).sort((a, b) => b[1] - a[1]).slice(0, 5); };
+      return { signups: [...users.values()].filter((u) => inR(u.created_at)).length, bets: sum("bet"), wins: sum("win"), deposits: sum("deposit"), withdrawals: sum("withdraw"), realPlayers: new Set(L.filter((l) => l.mode === "real" && l.type === "bet").map((l) => l.user_id)).size, funPlayers: new Set(L.filter((l) => l.mode === "fun" && l.type === "bet").map((l) => l.user_id)).size, views: V.length, visitors: new Set(V.map((x) => x.visitor)).size, pages: top(V, "path", false), refs: top(V, "ref", true) };
     },
     async kvGet(key) { return kv.has(key) ? JSON.parse(JSON.stringify(kv.get(key))) : null; },
     async kvSet(key, value) { kv.set(key, JSON.parse(JSON.stringify(value))); },

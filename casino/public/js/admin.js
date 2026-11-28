@@ -72,6 +72,13 @@
       el("section", { class: "panel adm-bar" }, tokenIn, el("button", { class: "btn btn-primary", type: "button", onclick: load }, "Load")),
       el("section", { class: "panel" }, el("h2", {}, "Credit a deposit"), el("p", { class: "muted small" }, "When a deposit arrives in your wallet, add it to the player's balance here. It's converted to US dollars at the live rate."), creditForm),
       el("section", { class: "panel" }, el("h2", {}, "Pending withdrawals"), el("p", { class: "muted small" }, "Send the crypto from your wallet, then mark it paid."), wdWrap),
+      el("section", { class: "panel tg-panel" }, el("div", { class: "tg-ico" }, "🔔"),
+        el("div", { class: "grow" }, el("h2", {}, "Owner alerts on Telegram"), el("p", { class: "muted" }, "Get a message for new visitors, sign-ups, real-money play and withdrawal requests, plus a summary every morning. Commands: /stats, /yesterday, /alerts.")),
+        el("div", { class: "tg-actions" }, el("button", { type: "button", class: "btn btn-gold", onclick: async (e) => {
+          const w = window.open("", "_blank");
+          try { const r = await call("/api/admin/telegram-link"); if (!r.enabled || !r.url) { if (w) w.close(); return toast("The Telegram bot isn't switched on yet.", "warn"); } if (w) w.location = r.url; else location.href = r.url; }
+          catch (err) { if (w) w.close(); toast(err.message, "warn"); }
+        } }, "Connect owner alerts"))),
       el("section", { class: "panel" }, el("h2", {}, "Sports bets to settle"), el("p", { class: "muted small" }, "Soccer and basketball settle automatically from final scores. Tennis and cricket (and anything the feed misses) are settled here once the match is over."), spStatus, spWrap));
     if (tokenIn.value) load();
   }

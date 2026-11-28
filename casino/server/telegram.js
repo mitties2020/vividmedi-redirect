@@ -85,8 +85,18 @@ module.exports = function createTelegram({ store, SP }) {
 
   /* ---------------- Channel scheduler ---------------- */
   async function tick() {
-    if (!on() || !CHANNEL) return;
+    if (!on()) return;
     const now = new Date(), day = now.toISOString().slice(0, 10), h = now.getUTCHours();
+    // Owner's morning summary (sent within 3 hours of the set time, once a day)
+    if (h >= SUMMARY_HOUR && h <= SUMMARY_HOUR + 3) {
+      const key = `tg:summary:${day}`;
+      if (!(await store.kvGet(key)) && (await admins()).length) {
+        await store.kvSet(key, { at: now.toISOString() });
+        const to = localDayStart(now), from = new Date(to.getTime() - 86400e3);
+        await alertAdmin(null, statsText(`Yesterday at CareQuay (${from.toISOString().slice(0, 10)})`, await store.stats(from, to)));
+      }
+    }
+    if (!CHANNEL) return;
     for (const ph of POST_HOURS) {
       if (h < ph || h > ph + 2) continue; // post within 2 hours of the slot (the free server may be asleep at the exact time)
       const key = `tg:post:${day}:${ph}`;
@@ -122,6 +132,60 @@ module.exports = function createTelegram({ store, SP }) {
     if (u && u.telegram_chat_id) await send(u.telegram_chat_id, text);
   }
 
+  /* ---------------- Owner alerts ---------------- */
+  const TZ = Number(env("ALERT_TZ_OFFSET_HOURS", 8)); // Perth
+  const SUMMARY_HOUR = Number(env("TG_SUMMARY_HOUR", 1)); // UTC; 1 = 9am Perth
+  const KINDS = { visitors: "New visitors", signups: "Sign-ups", bets: "Real-money play", withdrawals: "Withdrawal requests" };
+  const admins = async () => (await store.kvGet("tg:admins")) || [];
+  const prefs = async () => ({ visitors: true, signups: true, bets: true, withdrawals: true, ...((await store.kvGet("tg:alertprefs")) || {}) });
+  async function alertAdmin(kind, text) {
+    if (!on()) return;
+    const [list, p] = await Promise.all([admins(), prefs()]);
+    if (!list.length || (kind && p[kind] === false)) return;
+    for (const chat of list) await send(chat, text);
+  }
+  const localDayStart = (d = new Date()) => { const t = new Date(d.getTime() + TZ * 3600e3); t.setUTCHours(0, 0, 0, 0); return new Date(t.getTime() - TZ * 3600e3); };
+  function statsText(title, s) {
+    const ggr = (s.bets - s.wins) / 1e6;
+    const lines = [
+      `📊 <b>${esc(title)}</b>`, "",
+      `👀 Visitors: <b>${s.visitors}</b> (${s.views} page views)`,
+      `🆕 Sign-ups: <b>${s.signups}</b>`,
+      `🎮 Players: <b>${s.realPlayers}</b> real · ${s.funPlayers} fun`,
+      `💰 Deposits credited: <b>${money(s.deposits / 1e6)}</b>`,
+      `🎲 Real bets: ${money(s.bets / 1e6)} · won back ${money(s.wins / 1e6)}`,
+      `🏦 House result: <b>${ggr >= 0 ? "+" : "−"}${money(Math.abs(ggr))}</b>`,
+      `💸 Withdrawals requested: ${money(s.withdrawals / 1e6)}`,
+    ];
+    if (s.pages.length) lines.push("", "<b>Top pages</b>", ...s.pages.map(([p, n]) => `${esc(p)} — ${n}`));
+    if (s.refs.length) lines.push("", "<b>Where visitors came from</b>", ...s.refs.map(([r, n]) => `${esc(r)} — ${n}`));
+    return lines.join("\n");
+  }
+  async function adminLink() {
+    if (!on() || !botName) return null;
+    const raw = S.newToken().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+    await store.kvSet("tg:adminlink", { hash: S.sha(raw), exp: Date.now() + 30 * 60e3 });
+    return `https://t.me/${botName}?start=admin_${raw}`;
+  }
+  async function adminCommand(chat, cmd, args) {
+    if (cmd === "/stats") {
+      const from = localDayStart();
+      return send(chat, statsText("Today so far", await store.stats(from, new Date())), kb([btn("Open admin", `${SITE()}/#/admin`)]));
+    }
+    if (cmd === "/yesterday") {
+      const to = localDayStart(), from = new Date(to.getTime() - 86400e3);
+      return send(chat, statsText("Yesterday", await store.stats(from, to)));
+    }
+    if (cmd === "/alerts") {
+      const p = await prefs();
+      const [kind, val] = [String(args[0] || "").toLowerCase(), String(args[1] || "").toLowerCase()];
+      if (KINDS[kind] && (val === "on" || val === "off")) { p[kind] = val === "on"; await store.kvSet("tg:alertprefs", p); }
+      return send(chat, `🔔 <b>Owner alerts</b>\n\n${Object.entries(KINDS).map(([k, n]) => `${p[k] === false ? "🔕" : "🔔"} ${n} — <code>/alerts ${k} ${p[k] === false ? "on" : "off"}</code>`).join("\n")}\n\nDaily summary every morning at ${String((SUMMARY_HOUR + TZ + 24) % 24).padStart(2, "0")}:00 your time. /stats for today so far, /yesterday for yesterday.`);
+    }
+    if (cmd === "/unadmin") { await store.kvSet("tg:admins", (await admins()).filter((c) => c !== chat)); return send(chat, "Owner alerts turned off for this chat."); }
+    return null;
+  }
+
   /* ---------------- Helper bot (direct messages) ---------------- */
   const startText = () => `👋 <b>Welcome to CareQuay</b> — no-KYC crypto casino & pre-match sportsbook.\n\n• 20% cashback on weekly losses\n• Withdrawals usually in under 10 minutes\n• BTC, ETH, LTC, BNB and TRON\n\nCommands:\n/odds — today's top matches\n/cashback — weekly cashback\n/invite — your invite link (earn 10%)\n/balance — your balances\n/deposit — how to deposit\n\nSupport: support@carequay.com\n\nTo get bet and withdrawal alerts here, open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b>.${FOOTER}`;
   const linkHint = () => `🔗 First connect your account: log in at ${SITE()}, open <b>Invite friends</b> and tap <b>Connect Telegram</b>.`;
@@ -132,6 +196,15 @@ module.exports = function createTelegram({ store, SP }) {
     const [cmdRaw, ...args] = m.text.trim().split(/\s+/);
     const cmd = cmdRaw.toLowerCase().replace(/@.*$/, "");
     const user = await store.users.byTelegram(chat).catch(() => null);
+    if ((await admins()).includes(chat) && ["/stats", "/yesterday", "/alerts", "/unadmin"].includes(cmd)) return adminCommand(chat, cmd, args);
+    if (cmd === "/start" && (args[0] || "").startsWith("admin_")) {
+      const l = await store.kvGet("tg:adminlink");
+      if (!l || l.exp < Date.now() || l.hash !== S.sha(args[0].slice(6))) return send(chat, "That owner link has expired. Open the admin page and tap Connect owner alerts again.");
+      await store.kvSet("tg:adminlink", null);
+      const list = await admins(); if (!list.includes(chat)) list.push(chat); await store.kvSet("tg:admins", list);
+      await send(chat, "✅ <b>Owner alerts connected.</b>\n\nYou'll get a message here for new visitors, sign-ups, real-money play and withdrawal requests, plus a summary every morning.\n\n/stats — today so far\n/yesterday — yesterday's numbers\n/alerts — choose which alerts you get");
+      return;
+    }
     switch (cmd) {
       case "/start": {
         const p = args[0] || "";
@@ -184,5 +257,5 @@ module.exports = function createTelegram({ store, SP }) {
     return `https://t.me/${botName}?start=link_${raw}`;
   }
 
-  return { init, tick, bigWin, notify, webhook, linkUrl, enabled: on, botName: () => botName, channel: CHANNEL, money };
+  return { init, tick, bigWin, notify, webhook, linkUrl, adminLink, alertAdmin, enabled: on, botName: () => botName, channel: CHANNEL, money, esc };
 };

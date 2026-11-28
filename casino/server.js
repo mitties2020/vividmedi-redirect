@@ -132,6 +132,7 @@ route("POST", "/api/auth/register", async ({ req, res, body }) => {
   if (refCode && /^[a-z0-9]{4,16}$/i.test(refCode)) { const ref = await store.users.byRefCode(refCode); if (ref && ref.email !== email) referredBy = ref.id; }
   const user = await store.users.create({ email, passHash: await S.hashPassword(body.password), referredBy });
   if (user && referredBy) res.setHeader("Set-Cookie", `cq_ref=; Path=/; Max-Age=0; SameSite=Lax${PROD ? "; Secure" : ""}`);
+  if (user) setImmediate(() => TG.alertAdmin("signups", `🆕 <b>New sign-up</b>\n${TG.esc(email)}${referredBy ? "\n<i>Invited by a referral link</i>" : ""}`).catch(() => {}));
   if (!REQUIRE_CONFIRM) {
     if (!user) throw new HttpError(409, "An account with that email already exists. Log in instead.");
     await store.users.setConfirmed(user.id);
@@ -245,6 +246,7 @@ route("POST", "/api/withdraw", async ({ req, body }) => {
     const crypto_amount = +(usdx(amt) / price).toPrecision(10);
     const id = await ops.withdrawal({ coin: coin.sym, network, address, usd: amt, crypto_amount, price });
     await ops.ledger({ mode: "real", type: "withdraw", amount: amt, meta: { id, coin: coin.sym } });
+    setImmediate(() => TG.alertAdmin("withdrawals", `💸 <b>Withdrawal request #${id}</b>\n${TG.money(usdx(amt))} → ${crypto_amount} ${coin.sym} (${TG.esc(network)})\n<code>${TG.esc(address)}</code>\nFrom ${TG.esc(u.email)}\n\nPay it, then mark it paid in the admin page.`).catch(() => {}));
     return { ok: true, id, crypto_amount, price, ...balances(acct) };
   });
 });
@@ -282,6 +284,7 @@ route("POST", "/api/play/:game", async ({ req, body, params }) => {
     const name = out.game || GAME_NAMES[params.game];
     debitAcct(acct, mode, out.stake);
     await ops.ledger({ mode, type: "bet", amount: out.stake, game: name });
+    if (mode === "real") noteRealPlay(u, name, out.stake);
     if (out.payout > 0) { creditAcct(acct, mode, out.payout); await ops.ledger({ mode, type: "win", amount: out.payout, game: name }); }
     if (out.payout > 0 && mode === "real") setImmediate(() => TG.bigWin({ game: name, stake: usdx(out.stake), payout: usdx(out.payout), mode }).catch(() => {}));
     return { result: out.result, stake: usdx(out.stake), payout: usdx(out.payout), mode, ...balances(acct) };
@@ -314,6 +317,7 @@ route("POST", "/api/g/:game/:action", async ({ req, body, params }) => {
       const debit = (m) => { debitAcct(acct, mode, m); bets += m; };
       const res = act({ body, state: null, mode, debit, now, extra });
       await ops.ledger({ mode, type: "bet", amount: bets, game: name });
+      if (mode === "real") noteRealPlay(u, name, bets);
       await finish(res, mode);
       return { view: res.view, done: res.state == null, payout: usdx(res.payout || 0), mode, ...balances(acct) };
     }
@@ -458,6 +462,7 @@ route("POST", "/api/sports/bet", async ({ req, body }) => {
     const row = { mode, event_id: ev.id, sport_key: ev.sport_key, sport_title: ev.sport_title, home: ev.home, away: ev.away, commence_time: ev.commence, market, selection: o.name, point: market === "spreads" ? o.point : null, odds: o.price, stake };
     const id = await ops.sportsBet(row);
     await ops.ledger({ mode, type: "bet", amount: stake, game: sportsName(row), meta: { sportsBet: id } });
+    if (mode === "real") setImmediate(() => TG.alertAdmin("bets", `🎟 <b>Sports bet ${TG.money(stakeUsd)}</b>\n${TG.esc(o.name)}${market === "spreads" ? ` ${o.point > 0 ? "+" : ""}${o.point}` : ""} @ ${o.price.toFixed(2)} — ${TG.esc(ev.home)} v ${TG.esc(ev.away)}\nBy ${TG.esc(u.email)} · returns ${TG.money(Math.floor(stakeUsd * o.price * 100) / 100)}`).catch(() => {}));
     return { ok: true, id, mode, ...balances(acct) };
   });
 });
@@ -543,6 +548,43 @@ route("GET", "/api/referral", async ({ req }) => {
   return { code, link: `${base}/r/${code}`, rate: REFERRAL_RATE, invited: st.invited, earned: usdx(st.earned), weeks: st.recent.map((x) => ({ week: x.week_start, amount: usdx(x.amount), players: x.players })), nextPayout: S.nextBoundary(new Date()).toISOString() };
 });
 
+/* ---------- Owner alerts: real play, visitors ---------- */
+const realPlayToday = new Set();
+function noteRealPlay(u, game, stake) {
+  const k = `${u.id}:${new Date().toISOString().slice(0, 10)}`;
+  if (realPlayToday.has(k)) return;
+  if (realPlayToday.size > 5000) realPlayToday.clear();
+  realPlayToday.add(k);
+  setImmediate(() => TG.alertAdmin("bets", `🎰 <b>${TG.esc(u.email)}</b> is playing for real money\nFirst bet today: ${TG.money(usdx(stake))} on ${TG.esc(game)}`).catch(() => {}));
+}
+const BOT_UA = /bot|crawl|spider|slurp|preview|facebookexternalhit|embedly|curl|wget|python|headless|monitor|uptime|lighthouse|render/i;
+const VISIT_SALT = require("crypto").randomBytes(16).toString("hex");
+let lastVisitorAlert = 0;
+async function trackVisit(req, path) {
+  const ua = String(req.headers["user-agent"] || "");
+  if (!ua || BOT_UA.test(ua)) return;
+  const day = new Date().toISOString().slice(0, 10);
+  const salt = process.env.ADMIN_TOKEN || VISIT_SALT;
+  const visitor = require("crypto").createHash("sha256").update(`${ipOf(req)}|${ua}|${day}|${salt}`).digest("hex").slice(0, 16);
+  let ref = null;
+  try { const r = req.headers.referer ? new URL(req.headers.referer) : null; if (r && !r.host.endsWith("carequay.com") && !r.host.endsWith("onrender.com")) ref = r.host.replace(/^www\./, ""); } catch { /* bad referer */ }
+  if (!ref && cookies(req).cq_ref) ref = "invite link";
+  const since = new Date(`${day}T00:00:00Z`);
+  const seen = await store.visits.seen(visitor, since);
+  await store.visits.add({ visitor, path, ref });
+  if (seen || Date.now() - lastVisitorAlert < 60e3) return;
+  lastVisitorAlert = Date.now();
+  const device = /mobile|android|iphone/i.test(ua) ? "📱" : "💻";
+  const who = await currentUser(req).catch(() => null);
+  TG.alertAdmin("visitors", `👀 ${device} <b>New visitor</b> on ${TG.esc(path)}${ref ? `\nFrom ${TG.esc(ref)}` : ""}${who ? `\nLogged in as ${TG.esc(who.email)}` : ""}`).catch(() => {});
+}
+const track = (req, path) => { if (req.method === "GET") trackVisit(req, path).catch((e) => console.error("visit:", e.message)); };
+route("GET", "/api/admin/telegram-link", async ({ req }) => {
+  requireAdmin(req);
+  if (!TG.enabled()) return { enabled: false };
+  return { enabled: true, url: await TG.adminLink() };
+});
+
 /* ---------- Telegram ---------- */
 route("POST", "/api/telegram/webhook", async ({ req, body }) => {
   if (!(await TG.webhook(req, body))) throw new HttpError(404, "Not found.");
@@ -607,12 +649,12 @@ const server = http.createServer(async (req, res) => {
       const p = url.pathname.replace(/\/+$/, "") || "/";
       const ref = p.match(/^\/r\/([a-z0-9]{4,16})$/i);
       if (ref) { res.writeHead(302, { Location: "/signup", "Set-Cookie": `cq_ref=${ref[1].toLowerCase()}; Path=/; Max-Age=${30 * 86400}; SameSite=Lax${PROD ? "; Secure" : ""}`, "Cache-Control": "no-store" }); return res.end(); }
-      if (p === "/login" || p === "/signup" || p === "/app") return serveStatic(req, res, "/index.html");
+      if (p === "/login" || p === "/signup" || p === "/app") { track(req, p); return serveStatic(req, res, "/index.html"); }
       if (p === "/") {
         const q = url.searchParams;
-        if (q.has("reset") || q.has("confirmed") || (await currentUser(req).catch(() => null))) return serveStatic(req, res, "/index.html");
+        if (q.has("reset") || q.has("confirmed") || (await currentUser(req).catch(() => null))) { track(req, "/ (lobby)"); return serveStatic(req, res, "/index.html"); }
       }
-      if (await SITE.handle(req, res, url)) return;
+      if (await SITE.handle(req, res, url)) { if (res.statusCode === 200 && !/\.(xml|txt)$/.test(p)) track(req, p); return; }
     } catch (e) { console.error(e); return send(res, 500, "Something went wrong."); }
     return serveStatic(req, res, url.pathname);
   }
