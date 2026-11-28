@@ -17,6 +17,11 @@ const MICRO = 1e6;
 const FUN_START = 1000 * MICRO;
 const CASHBACK_RATE = 0.2;
 const MIN_WITHDRAW = Number(process.env.MIN_WITHDRAW_USD || 20);
+const DAILY_WITHDRAW = Number(process.env.WITHDRAW_DAILY_MAX_USD || 10000); // per rolling 24 hours
+async function withdrawnLast24h(userId) {
+  const since = Date.now() - 86400e3;
+  return (await store.withdrawals(userId)).filter((w) => w.status !== "rejected" && new Date(w.created_at).getTime() > since).reduce((s, w) => s + Number(w.usd), 0);
+}
 const SESSION_DAYS = 30;
 const PROD = process.env.NODE_ENV === "production";
 const REQUIRE_CONFIRM = process.env.REQUIRE_EMAIL_CONFIRM === "1"; // off: accounts work straight after sign-up
@@ -216,7 +221,8 @@ route("GET", "/api/wallet", async ({ req }) => {
   const u = await requireUser(req);
   const out = await store.tx(u.id, async (acct, ops) => { await settleCashback(acct, ops); return balances(acct); });
   const [deps, wds] = await Promise.all([store.deposits(u.id), store.withdrawals(u.id)]);
-  return { ...out, minWithdraw: MIN_WITHDRAW, deposits: deps.map((d) => ({ ...d, usd: usd(d.usd) })), withdrawals: wds.map((w) => ({ ...w, usd: usd(w.usd) })) };
+  const used = await withdrawnLast24h(u.id);
+  return { ...out, minWithdraw: MIN_WITHDRAW, dailyMax: DAILY_WITHDRAW, dailyLeft: Math.max(0, usd(DAILY_WITHDRAW * MICRO - used)), deposits: deps.map((d) => ({ ...d, usd: usd(d.usd) })), withdrawals: wds.map((w) => ({ ...w, usd: usd(w.usd) })) };
 });
 
 route("POST", "/api/withdraw", async ({ req, body }) => {
@@ -233,6 +239,8 @@ route("POST", "/api/withdraw", async ({ req, body }) => {
     await settleCashback(acct, ops);
     if (acct.wager_remaining > 0) throw new HttpError(400, `Your deposits must be wagered 1× before withdrawing. $${usd(acct.wager_remaining).toFixed(2)} left to wager.`);
     if (acct.real_balance < amt) throw new HttpError(400, "That's more than your real balance.");
+    const left = DAILY_WITHDRAW * MICRO - (await withdrawnLast24h(u.id));
+    if (amt > left) throw new HttpError(400, left >= MIN_WITHDRAW * MICRO ? `You can withdraw up to $${DAILY_WITHDRAW.toLocaleString("en-US")} in any 24 hours. You have $${usd(left).toLocaleString("en-US", { minimumFractionDigits: 2 })} left right now.` : `You've reached the $${DAILY_WITHDRAW.toLocaleString("en-US")} withdrawal limit for the last 24 hours. You can withdraw more once earlier requests are over 24 hours old.`);
     acct.real_balance -= amt;
     const crypto_amount = +(usdx(amt) / price).toPrecision(10);
     const id = await ops.withdrawal({ coin: coin.sym, network, address, usd: amt, crypto_amount, price });

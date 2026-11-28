@@ -78,7 +78,7 @@
         slipBody.replaceChildren(el("div", { class: "sb-slip-empty" }, el("span", { class: "sb-slip-ico" }, "🎟️"), el("b", {}, "Your bet slip is empty"), el("p", {}, "Tap any price to add a selection.")));
         return;
       }
-      const stake = betInput({ label: "Stake", value: slip.stake || 10 });
+      const stake = betInput({ label: "Stake", value: slip.stake || 10, max: (meta && meta.limits && meta.limits.maxStake) || 500 });
       const ret = el("b", { class: "sb-return" });
       const btn = el("button", { type: "button", class: "btn btn-gold btn-lg btn-block sb-place" });
       const upd = () => { slip.stake = stake.value; ret.textContent = fmtUSD(Math.floor(stake.value * slip.odds * 100) / 100); btn.textContent = `Place bet · ${fmtUSD(stake.value)}`; };

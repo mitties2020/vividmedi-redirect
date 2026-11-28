@@ -62,6 +62,6 @@
   // Baccarat payouts (total return per unit): player 1:1, banker 0.95:1, tie 8:1 (push on main bets)
   const BACCARAT = { player: 2, banker: 1.95, tie: 9 };
 
-  const api = { EDGE, C, plinkoTable, KENO, VIDEO_POKER, TCP_ANTE_BONUS, TCP_PAIRPLUS, WHEEL, REDS, ROULETTE, BACCARAT, MIN_BET: 0.1, MAX_BET: 1000 };
+  const api = { EDGE, C, plinkoTable, KENO, VIDEO_POKER, TCP_ANTE_BONUS, TCP_PAIRPLUS, WHEEL, REDS, ROULETTE, BACCARAT, MIN_BET: 0.1, MAX_BET: 50 };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CQTables = api;
 })(typeof window !== "undefined" ? window : globalThis);

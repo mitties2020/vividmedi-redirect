@@ -75,13 +75,13 @@
   const fail = (e) => { if (e && e.status !== 401) toast(e.message || "Something went wrong.", "warn"); };
 
   /* ---------- Shared controls ---------- */
-  function betInput({ label = "Bet amount", value = 1 } = {}) {
-    const input = el("input", { type: "number", min: String(T.MIN_BET), max: String(T.MAX_BET), step: "0.01", inputmode: "decimal", class: "bet-input", value: String(value) });
-    const clamp = (v) => Math.max(T.MIN_BET, Math.min(T.MAX_BET, cents(v)));
+  function betInput({ label = "Bet amount", value = 1, max: MAX = T.MAX_BET } = {}) {
+    const input = el("input", { type: "number", min: String(T.MIN_BET), max: String(MAX), step: "0.01", inputmode: "decimal", class: "bet-input", value: String(value) });
+    const clamp = (v) => Math.max(T.MIN_BET, Math.min(MAX, cents(v)));
     const bump = (v) => { input.value = clamp(v).toFixed(2); input.dispatchEvent(new Event("input")); };
     const half = el("button", { type: "button", class: "chip-btn", onclick: () => bump(+input.value / 2) }, "½");
     const dbl = el("button", { type: "button", class: "chip-btn", onclick: () => bump(+input.value * 2) }, "2×");
-    const max = el("button", { type: "button", class: "chip-btn", onclick: () => bump(Math.min(balance(), T.MAX_BET)) }, "Max");
+    const max = el("button", { type: "button", class: "chip-btn", onclick: () => bump(Math.min(balance(), MAX)) }, "Max");
     const wrap = el("label", { class: "field" }, el("span", { class: "field-label" }, label), el("div", { class: "bet-row" }, el("span", { class: "coin-glyph" }, "$"), input, half, dbl, max));
     return {
       el: wrap, input,

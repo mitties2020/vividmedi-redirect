@@ -965,3 +965,14 @@ body[data-mode="real"] .topbar { box-shadow: inset 0 -2px 0 rgba(245, 196, 81, .
 .tg-panel p { margin: 0; }
 .tg-ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(180deg, #37bbfe, #1d93d2); font-size: 1.5rem; }
 .tg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Help & FAQ */
+.faq-search { width: 100%; margin: 0 0 16px; }
+.faq-cat h2 { display: flex; align-items: center; gap: 10px; }
+.faq-ico { font-size: 1.2rem; }
+.faq-item { border-top: 1px solid var(--line); }
+.faq-item summary { padding: 13px 4px; font-weight: 700; cursor: pointer; list-style: none; }
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after { content: "+"; float: right; color: var(--teal); font-size: 1.1rem; }
+.faq-item[open] summary::after { content: "−"; }
+.faq-item p { margin: 0 4px 14px; color: var(--dim); }
+.faq-foot { margin-top: 10px; }

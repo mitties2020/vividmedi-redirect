@@ -35,7 +35,7 @@ const GAMES = [
     desc: "Play five premium video slots with Bitcoin, Ethereum, Litecoin, BNB or TRON: classic sevens, 243 ways, tumbling gems and free spins.",
     body: [
       ["Five slots, five styles", "<b>Triple Sevens</b> is a classic three-reel machine with five paylines. <b>Burning Sevens</b> has ten lines, wilds and free spins. <b>Crown Royale</b> runs twenty lines on a 5×4 grid with triple-paying free spins. <b>Hot Gems</b> pays 243 ways — any matching symbols on adjacent reels count. <b>Gem Cascade</b> pays anywhere: eight or more matching gems win, then vanish so new ones tumble in."],
-      ["How to play", "Choose your total bet (from $0.10 to $1,000), then spin. Turbo speeds up the reels and Auto plays 10, 25 or 50 spins in a row. Every slot has a full pay table under <i>How it works</i>."],
+      ["How to play", "Choose your total bet (from $0.10 to $50 per spin), then spin. Turbo speeds up the reels and Auto plays 10, 25 or 50 spins in a row. Every slot has a full pay table under <i>How it works</i>."],
       ["Return to player", "All five slots are set to return about 94% of stakes over the long run. Results are decided on our server with a cryptographically secure random number generator before the reels stop."],
     ] },
   { slug: "blackjack", name: "Blackjack", app: "#/play/blackjack", img: "blackjack", rtp: "about 99.4% with basic strategy", title: "Crypto Blackjack — 3:2 payouts, six decks",
@@ -79,18 +79,7 @@ const COIN_TIPS = {
   BNB: "Send BNB on BNB Smart Chain (BEP-20). Don't use the old BNB Beacon Chain (BEP-2) or the Ethereum network.",
   TRX: "Send TRX on the TRON network (TRC-20). TRON transfers are near-instant and fees are tiny.",
 };
-const FAQ = [
-  ["Do I need to verify my identity?", "No. CareQuay is a no-KYC casino: you sign up with an email address and password, and we don't ask for ID documents to deposit or withdraw."],
-  ["Which cryptocurrencies can I use?", "Bitcoin (BTC), Ethereum (ETH), Litecoin (LTC), BNB on BNB Smart Chain and TRON (TRX). Your balance is shown in US dollars; deposits are converted at the live market rate."],
-  ["How fast are withdrawals?", "Withdrawals are usually processed in under 10 minutes. Occasionally they take longer, for example during network congestion or when a payout needs a security review. The minimum withdrawal is $20."],
-  ["Is there a wagering requirement?", "Each deposit must be wagered once (1×) on real-money games or sports bets before it can be withdrawn. Cashback and referral earnings have no wagering requirement."],
-  ["How does the 20% cashback work?", "Every week (Sunday 22:00 UTC to Sunday 22:00 UTC) we add up your real-money bets minus your real-money winnings. If that's a loss, 20% of it is paid back to your real balance automatically."],
-  ["Can I play for free?", "Yes. Every game and the sportsbook have a Fun mode with a $1,000 practice balance that you can reload any time. Fun-mode money has no cash value."],
-  ["Can I bet on matches that have started?", "No. The sportsbook is pre-match only — betting on each match closes just before it starts."],
-  ["Are the games fair?", "Every result is decided on our server using a cryptographically secure random number generator, and each game's return to player is shown in its rules."],
-  ["How does the referral program work?", "Every player gets a personal invite link. When someone signs up through it, you earn 10% of their weekly net real-money losses, paid to your real balance every Sunday."],
-  ["Who can play?", "You must be 18 or over (or older if the law where you live says so), and online gambling must be legal where you are. You're responsible for checking your local laws."],
-];
+const { FAQ: FAQ_CATS, all: faqAll } = require("../public/js/shared/faq.js");
 
 /* ---------------- Layout ---------------- */
 module.exports = function createSite({ store, SP, currentUser }) {
@@ -120,7 +109,7 @@ ${body}
 <div><h3>Sports</h3>${Object.entries(SPORTS).map(([k, s]) => `<a href="/sports/${k}">${s.name} odds</a>`).join("")}<a href="/sports/soccer/epl">EPL odds</a><a href="/sports/basketball/nba">NBA odds</a></div>
 <div><h3>Casino</h3>${GAMES.map((g) => `<a href="/${g.slug}">${g.name}</a>`).join("")}</div>
 <div><h3>Deposits</h3>${Object.entries(COIN_SLUG).map(([slug, sym]) => `<a href="/deposit/${slug}">Deposit ${S.COINS.find((c) => c.sym === sym).name}</a>`).join("")}</div>
-<div><h3>Help</h3><a href="/bonus/cashback">20% cashback</a><a href="/invite">Refer a friend</a><a href="/faq">FAQ</a><a href="/terms">Terms &amp; Conditions</a><a href="/responsible-gambling">Responsible gambling</a></div>
+<div><h3>Help</h3><a href="mailto:support@carequay.com">support@carequay.com</a><a href="/bonus/cashback">20% cashback</a><a href="/invite">Refer a friend</a><a href="/faq">FAQ</a><a href="/terms">Terms &amp; Conditions</a><a href="/responsible-gambling">Responsible gambling</a></div>
 </div><div class="s-wrap s-legal"><span class="age">18+</span><p>Gambling can be addictive — please play responsibly. Only play where online gambling is legal. Need help? <a href="https://www.gamblinghelponline.org.au" rel="noopener" target="_blank">Gambling Help Online</a> · <a href="https://www.gamcare.org.uk" rel="noopener" target="_blank">GamCare</a></p><p>© ${new Date().getUTCFullYear()} CareQuay Casino</p></div></footer>
 </body></html>`;
   }
@@ -196,7 +185,7 @@ ${prose([[`Betting on the ${l.name}`, `${s.intro}`], ["Settlement", s.settle]])}
 ${prose([["Also in the lobby", "Baccarat (punto banco, 8 decks), Three Card Poker with Pair Plus, Jacks or Better video poker, Dice, Limbo and Keno."], ["Play free first", "Every game has a Fun mode with a $1,000 practice balance, so you can learn the rules before playing for real."], ["Fair results", "Every outcome is decided on our server with a cryptographically secure random number generator before the animation starts. Each game's return to player is published in its rules."]])}` });
   for (const g of GAMES) {
     P[`/${g.slug}`] = async (req, user) => page(req, { path: `/${g.slug}`, user, title: g.title, h1: esc(g.title.split(" — ")[0]), kicker: "Casino", crumbs: [{ name: "Casino", path: "/casino" }, { name: g.name, path: `/${g.slug}` }], desc: g.desc, img: `${g.img}.jpg`,
-      body: `<section class="s-wrap s-game"><figure><img src="/img/${g.img}.jpg" alt="${esc(g.name)} at CareQuay Casino" width="1200" height="630" loading="lazy"></figure><div class="s-game-side"><div class="s-stat"><small>Return to player</small><b>${esc(g.rtp)}</b></div><div class="s-stat"><small>Bets</small><b>$0.10 – $1,000</b></div><a class="btn btn-gold btn-lg btn-block" href="${playHref(user, g.app)}">${user ? "Play now" : "Sign up to play"}</a><p class="s-muted s-small">Or try it free in Fun mode with $1,000 practice money.</p></div></section>
+      body: `<section class="s-wrap s-game"><figure><img src="/img/${g.img}.jpg" alt="${esc(g.name)} at CareQuay Casino" width="1200" height="630" loading="lazy"></figure><div class="s-game-side"><div class="s-stat"><small>Return to player</small><b>${esc(g.rtp)}</b></div><div class="s-stat"><small>Bets</small><b>$0.10 – $50</b></div><a class="btn btn-gold btn-lg btn-block" href="${playHref(user, g.app)}">${user ? "Play now" : "Sign up to play"}</a><p class="s-muted s-small">Or try it free in Fun mode with $1,000 practice money.</p></div></section>
 ${prose(g.body)}` });
   }
 
@@ -227,9 +216,9 @@ ${prose([["Important", `Only send ${sym} on the ${esc(c.nets[0])} network to you
   }
 
   P["/faq"] = async (req, user) => page(req, { path: "/faq", user, title: "FAQ — Deposits, Withdrawals, Cashback & Sports", h1: "Frequently asked questions", kicker: "Help", crumbs: [{ name: "FAQ", path: "/faq" }],
-    desc: "Answers about no-KYC sign-up, crypto deposits and withdrawals, wagering, 20% cashback, the sportsbook and referrals at CareQuay Casino.",
-    body: `<section class="s-wrap s-faq">${FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</section>`,
-    ld: [{ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) }] });
+    desc: "Answers about no-KYC sign-up, crypto deposits, withdrawal limits and speed, wagering, 20% cashback, betting limits, the sportsbook and referrals at CareQuay Casino.",
+    body: `<section class="s-wrap s-faq">${FAQ_CATS.map((c) => `<h2 class="s-h2">${c.icon} ${esc(c.cat)}</h2>${c.items.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}`).join("")}</section>`,
+    ld: [{ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faqAll().map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) }] });
 
   P["/terms"] = async (req, user) => page(req, { path: "/terms", user, title: "Terms & Conditions", h1: "Terms &amp; Conditions", crumbs: [{ name: "Terms & Conditions", path: "/terms" }],
     desc: "The terms that apply to your CareQuay Casino account, deposits, withdrawals, cashback, referrals, casino games and sports bets.",
@@ -240,7 +229,7 @@ ${prose([["Important", `Only send ${sym} on the ${esc(c.nets[0])} network to you
     body: prose([
       ["Stay in control", "Treat gambling as paid entertainment, not a way to make money. Decide on a budget before you play and stick to it. Never chase losses, never gamble with money you need for bills, and take regular breaks. Fun mode lets you enjoy every game without risking anything."],
       ["Warning signs", "Spending more than you planned, borrowing to gamble, hiding it from people close to you, feeling anxious when you're not playing, or playing to win back losses are all signs it may be time to stop."],
-      ["Take a break or close your account", "If you want to take a break or close your account, contact support and we'll do it. Closing an account returns any withdrawable real balance to you."],
+      ["Take a break or close your account", "If you want to take a break or close your account, email <a href=\"mailto:support@carequay.com\">support@carequay.com</a> and we'll do it. Closing an account returns any withdrawable real balance to you."],
       ["Free, confidential help", `<a href="https://www.gamblinghelponline.org.au" rel="noopener" target="_blank">Gambling Help Online</a> (Australia, 24/7: 1800 858 858) · <a href="https://www.gamcare.org.uk" rel="noopener" target="_blank">GamCare</a> (UK) · <a href="https://www.gamblersanonymous.org" rel="noopener" target="_blank">Gamblers Anonymous</a> · <a href="https://www.ncpgambling.org" rel="noopener" target="_blank">National Council on Problem Gambling</a> (US: 1-800-GAMBLER).`],
       ["Under 18s", "Gambling is strictly for adults. Accounts opened by anyone under 18 are closed. If you share a device with children, keep your login private."],
     ]) });

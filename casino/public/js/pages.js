@@ -33,19 +33,19 @@
     const wdBtn = el("button", { class: "btn btn-primary btn-lg btn-block", type: "submit" }, "Request withdrawal");
     const histDep = el("div", { class: "table-wrap" });
     const histWd = el("div", { class: "table-wrap" });
-    let coins = [], selected = null, minWithdraw = 20;
+    let coins = [], selected = null, minWithdraw = 20, dailyMax = 10000, dailyLeft = null;
 
     const wdForm = el("form", { class: "wd-form", novalidate: true },
       el("div", { class: "wd-row" }, CQ.field("Coin", wdCoin), CQ.field("Network", wdNet)),
       CQ.field("Your wallet address", wdAddr),
-      el("label", { class: "field" }, el("span", { class: "field-label" }, el("span", {}, "Amount (USD)"), el("button", { type: "button", class: "auth-inline", onclick: () => { wdAmt.value = Math.floor(state.bal.real * 100) / 100; est(); } }, "Max")), el("div", { class: "bet-row" }, el("span", { class: "coin-glyph" }, "$"), wdAmt)),
+      el("label", { class: "field" }, el("span", { class: "field-label" }, el("span", {}, "Amount (USD)"), el("button", { type: "button", class: "auth-inline", onclick: () => { wdAmt.value = Math.floor(Math.min(state.bal.real, dailyLeft != null ? dailyLeft : dailyMax) * 100) / 100; est(); } }, "Max")), el("div", { class: "bet-row" }, el("span", { class: "coin-glyph" }, "$"), wdAmt)),
       wdEst, wdMsg, wdBtn,
       el("p", { class: "muted small" }, "Double-check the address and network — crypto sent to a wrong address can't be recovered."));
 
     function est() {
       const c = coins.find((x) => x.sym === wdCoin.value);
       const v = Number(wdAmt.value);
-      wdEst.textContent = c && v > 0 ? `You'll receive ≈ ${fmtCrypto(v / c.usd)} ${c.sym} at ${fmtPrice(c.usd)} (live rate, fixed when you submit)` : `Minimum withdrawal ${fmtUSD(minWithdraw)}`;
+      wdEst.textContent = c && v > 0 ? `You'll receive ≈ ${fmtCrypto(v / c.usd)} ${c.sym} at ${fmtPrice(c.usd)} (live rate, fixed when you submit)` : `Minimum withdrawal ${fmtUSD(minWithdraw)} · maximum ${fmtUSD(dailyMax).replace(".00", "")} per 24 hours${dailyLeft != null && dailyLeft < dailyMax ? ` (${fmtUSD(dailyLeft)} left now)` : ""}`;
     }
     function fillNets() { const c = coins.find((x) => x.sym === wdCoin.value); wdNet.replaceChildren(...(c ? c.nets : []).map((n) => el("option", { value: n }, n))); est(); }
     wdCoin.addEventListener("change", fillNets); wdAmt.addEventListener("input", est);
@@ -96,7 +96,7 @@
     async function loadHistory() {
       try {
         const w = await api("/api/wallet");
-        minWithdraw = w.minWithdraw; est();
+        minWithdraw = w.minWithdraw; if (w.dailyMax) dailyMax = w.dailyMax; if (w.dailyLeft != null) dailyLeft = w.dailyLeft; est();
         const table = (rows, cols, empty) => el("table", { class: "bets-table" }, el("thead", {}, el("tr", {}, cols.map((c) => el("th", { class: c.num ? "num" : "" }, c.h)))), el("tbody", {}, rows.length ? rows.map((r) => el("tr", {}, cols.map((c) => el("td", { class: c.num ? "num" : "" }, c.v(r))))) : el("tr", {}, el("td", { colspan: String(cols.length), class: "empty" }, empty))));
         histDep.replaceChildren(table(w.deposits, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => r.coin }, { h: "Amount", num: 1, v: (r) => `${fmtCrypto(r.amount)} ${r.coin}` }, { h: "Credited", num: 1, v: (r) => (r.status === "credited" ? fmtUSD(r.usd) : "–") }, { h: "Status", v: (r) => el("span", { class: `status st-${r.status === "credited" ? "paid" : r.status === "processing" ? "pending" : r.status}` }, r.status === "credited" ? "credited" : r.status === "processing" ? "pending" : r.status) }], "No deposits yet"));
         histWd.replaceChildren(table(w.withdrawals, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => `${r.coin}${r.network ? ` · ${r.network}` : ""}` }, { h: "Address", v: (r) => `${r.address.slice(0, 8)}…${r.address.slice(-6)}` }, { h: "Amount", num: 1, v: (r) => `${fmtUSD(r.usd)} (${fmtCrypto(r.crypto_amount)} ${r.coin})` }, { h: "Status", v: (r) => el("span", { class: `status st-${r.status}` }, r.status) }], "No withdrawals yet"));
@@ -236,5 +236,21 @@
     } catch (e) { fail(e); }
   }
 
-  window.CQPages = { wallet, bonus, terms, termsModal, history: historyPage, coinIcon, invite };
+  /* ================= HELP & FAQ ================= */
+  function faq(view) {
+    const q = el("input", { class: "text-in boxed faq-search", type: "search", placeholder: "Search help — e.g. withdraw, cashback, handicap", "aria-label": "Search help" });
+    const body = el("div", { class: "faq" });
+    const paint = () => {
+      const t = q.value.trim().toLowerCase();
+      const cats = window.CQFaq.FAQ.map((c) => ({ ...c, items: c.items.filter(([a, b]) => !t || (a + " " + b).toLowerCase().includes(t)) })).filter((c) => c.items.length);
+      body.replaceChildren(...(cats.length ? cats.map((c) => el("section", { class: "panel faq-cat" }, el("h2", {}, el("span", { class: "faq-ico" }, c.icon), c.cat),
+        ...c.items.map(([a, b]) => el("details", { class: "faq-item", open: !!t }, el("summary", {}, a), el("p", {}, b))))) : [el("p", { class: "muted" }, "No answers match that search.")]));
+    };
+    q.addEventListener("input", paint);
+    view.replaceChildren(head("❓", "Help & FAQ", "Answers about your account, deposits, withdrawals, bonuses, games and the sportsbook."), q, body,
+      el("p", { class: "muted small faq-foot" }, "Still stuck? Email ", el("a", { href: "mailto:support@carequay.com" }, "support@carequay.com"), " or see the ", el("a", { href: "#/terms" }, "Terms & Conditions"), "."));
+    paint();
+  }
+
+  window.CQPages = { wallet, bonus, terms, termsModal, history: historyPage, coinIcon, invite, faq };
 })();

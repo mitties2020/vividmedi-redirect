@@ -12,7 +12,7 @@
     paint();
     return { el: row, get value() { return values[cur]; }, short };
   }
-  const CHIPS = [0.1, 0.5, 1, 5, 25, 100];
+  const CHIPS = [0.1, 0.5, 1, 5, 10, 25];
 
   /* ================= BLACKJACK ================= */
   registerGame({
