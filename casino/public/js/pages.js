@@ -60,7 +60,7 @@
       wdBtn.disabled = false;
     });
 
-    let activeReq = null, reqTimer = 0, lockTimer = 0;
+    let activeReq = null, reqTimer = 0, lockTimer = 0, bonusOffer = null;
     const stopReq = () => { clearInterval(reqTimer); clearInterval(lockTimer); reqTimer = lockTimer = 0; };
     const copyable = (text, cls = "addr") => {
       const code = el("code", { class: cls }, text);
@@ -81,15 +81,31 @@
       const conv = el("p", { class: "wd-est" }, `Minimum $5 · 1 ${c.sym} = ${fmtPrice(c.usd)}`);
       const msg = el("p", { class: "auth-msg", role: "alert" });
       const go = el("button", { type: "submit", class: "btn btn-gold btn-lg btn-block" }, "Get my deposit amount");
-      const upd = () => { const v = Number(amt.value); conv.textContent = v > 0 ? `≈ ${fmtCrypto(v / c.usd)} ${c.sym} · minimum $5` : `Minimum $5 · 1 ${c.sym} = ${fmtPrice(c.usd)}`; };
+      const B = bonusOffer && bonusOffer.eligible ? bonusOffer : null;
+      const bonusBox = B ? el("input", { type: "checkbox", checked: true }) : null;
+      const bonusNote = el("small", { class: "bonus-note" });
+      const bonusOf = (v) => Math.min(Math.floor(v * B.pct) / 100, B.cap);
+      const upd = () => {
+        const v = Number(amt.value);
+        conv.textContent = v > 0 ? `≈ ${fmtCrypto(v / c.usd)} ${c.sym} · minimum $5` : `Minimum $5 · 1 ${c.sym} = ${fmtPrice(c.usd)}`;
+        if (!B) return;
+        bonusNote.className = "bonus-note";
+        if (!bonusBox.checked) bonusNote.textContent = "No bonus — your deposit only needs to be wagered 1×.";
+        else if (v >= B.min) { bonusNote.className = "bonus-note good"; bonusNote.textContent = `You'll get ${fmtUSD(v)} + ${fmtUSD(bonusOf(v))} bonus = ${fmtUSD(v + bonusOf(v))} to play with.`; }
+        else if (v > 0) { bonusNote.className = "bonus-note warn"; bonusNote.textContent = `Deposit ${fmtUSD(B.min).replace(".00", "")} or more to get the bonus — it's for your first deposit only.`; }
+        else bonusNote.textContent = `First deposit of ${fmtUSD(B.min).replace(".00", "")}+ only · bonus must be wagered ${B.wager}× before withdrawing.`;
+      };
       amt.addEventListener("input", upd);
+      if (bonusBox) bonusBox.addEventListener("change", upd);
+      const bonusRow = B ? el("label", { class: "bonus-opt" }, bonusBox, el("span", {}, el("b", {}, `🎁 Claim my ${B.pct}% first-deposit bonus`), el("small", {}, `Up to ${fmtUSD(B.cap).replace(".00", "")} extra on a first deposit of ${fmtUSD(B.min).replace(".00", "")}+. Bonus must be wagered ${B.wager}× before you can withdraw. Untick to skip it.`)), ) : null;
       const form = el("form", { class: "dep-form", novalidate: true },
         el("label", { class: "field" }, el("span", { class: "field-label" }, "How much do you want to deposit? (USD)"), el("div", { class: "bet-row" }, el("span", { class: "coin-glyph" }, "$"), amt)),
-        el("div", { class: "sb-quick" }, [20, 50, 100, 250, 500].map((v) => el("button", { type: "button", class: "chip-btn", onclick: () => { amt.value = v; upd(); } }, `$${v}`))),
-        conv, msg, go);
+        el("div", { class: "sb-quick" }, (B ? [20, 75, 100, 200, 500] : [20, 50, 100, 250, 500]).map((v) => el("button", { type: "button", class: "chip-btn", onclick: () => { amt.value = v; upd(); } }, `$${v}`))),
+        conv, bonusRow, B ? bonusNote : null, msg, go);
+      upd();
       form.addEventListener("submit", async (e) => {
         e.preventDefault(); msg.textContent = ""; go.disabled = true;
-        try { const r = await api("/api/deposit/start", { coin: c.sym, usd: Number(amt.value) }); showRequest(c, r); }
+        try { const r = await api("/api/deposit/start", { coin: c.sym, usd: Number(amt.value), bonus: !!(bonusBox && bonusBox.checked) }); showRequest(c, r); }
         catch (err) { msg.className = "auth-msg error"; msg.textContent = err.message; go.disabled = false; }
       });
       depositPanel.replaceChildren(
@@ -112,6 +128,7 @@
         el("div", { class: "dep-head" }, coinIcon(c.sym), el("div", {}, el("h3", {}, `Send exactly ${r.amount} ${c.sym}`), el("p", { class: "muted" }, `≈ ${fmtUSD(r.usd)} · ${r.network}`))),
         el("div", { class: "addr-box exact" }, el("small", {}, "1. Amount — send this exact amount"), copyable(r.amount, "addr big-amt")),
         el("div", { class: "addr-box" }, el("small", {}, `2. To this ${c.sym} address · ${r.network}`), copyable(r.address), el("span", { class: "addr-warn" }, `Send only ${c.sym} on the ${r.network} network. If your exchange takes its fee out of the amount, add the fee on top so exactly ${r.amount} arrives.`)),
+        r.bonusUsd > 0 ? el("p", { class: "bonus-note good" }, `🎁 ${fmtUSD(r.bonusUsd)} first-deposit bonus will be added when it arrives.`) : null,
         status, lock,
         el("button", { type: "button", class: "auth-inline dep-new", onclick: () => { stopReq(); activeReq = null; pickDeposit(c, true); } }, "Start a different deposit"));
       const poll = async () => {
@@ -120,7 +137,7 @@
           if (d.status === "credited" || d.status === "unconfirmed") {
             stopReq(); activeReq = null;
             status.className = "dep-status ok";
-            status.replaceChildren(el("span", { class: "dep-tick" }, "✓"), el("div", {}, el("b", {}, `${fmtUSD(d.usd)} added to your balance`), el("small", {}, d.status === "unconfirmed" ? "You can play now. Withdrawals unlock once it has 1 confirmation." : "Confirmed — you're all set.")));
+            status.replaceChildren(el("span", { class: "dep-tick" }, "✓"), el("div", {}, el("b", {}, d.bonus > 0 ? `${fmtUSD(d.usd)} + ${fmtUSD(d.bonus)} bonus added to your balance` : `${fmtUSD(d.usd)} added to your balance`), el("small", {}, d.status === "unconfirmed" ? "You can play now. Withdrawals unlock once it has 1 confirmation." : "Confirmed — you're all set.")));
             lock.textContent = ""; loadHistory(); window.CQSound && CQSound.play("win");
           } else if (d.status === "expired") { stopReq(); status.className = "dep-status err"; status.replaceChildren(el("div", {}, el("b", {}, "This deposit request expired"), el("small", {}, "If you sent it, email support@carequay.com with the transaction ID."))); }
         } catch { /* keep polling */ }
@@ -144,11 +161,14 @@
     async function loadHistory() {
       try {
         const w = await api("/api/wallet");
+        const offerChanged = JSON.stringify(w.bonusOffer) !== JSON.stringify(bonusOffer);
+        bonusOffer = w.bonusOffer || null;
+        if (offerChanged && !activeReq && selected && coins.length) pickDeposit(coins.find((c) => c.sym === selected), true);
         const open = !activeReq && w.deposits.find((d) => d.status === "awaiting" && Date.now() - new Date(d.created_at).getTime() < 3600e3);
         if (open && coins.length) { const c = coins.find((x) => x.sym === open.coin); if (c) { selected = c.sym; CQ.$$(".coin-card", coinGrid).forEach((b) => b.classList.toggle("on", b.dataset.sym === c.sym)); showRequest(c, { id: open.id, amount: Number(open.amount).toFixed(c.sym === "TRX" ? 6 : 8), usd: open.usd, price: open.price, address: c.address, network: c.nets[0], lockedUntil: new Date(new Date(open.created_at).getTime() + 3600e3).toISOString() }); } }
         minWithdraw = w.minWithdraw; if (w.dailyMax) dailyMax = w.dailyMax; if (w.dailyLeft != null) dailyLeft = w.dailyLeft; est();
         const table = (rows, cols, empty) => el("table", { class: "bets-table" }, el("thead", {}, el("tr", {}, cols.map((c) => el("th", { class: c.num ? "num" : "" }, c.h)))), el("tbody", {}, rows.length ? rows.map((r) => el("tr", {}, cols.map((c) => el("td", { class: c.num ? "num" : "" }, c.v(r))))) : el("tr", {}, el("td", { colspan: String(cols.length), class: "empty" }, empty))));
-        histDep.replaceChildren(table(w.deposits, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => r.coin }, { h: "Amount", num: 1, v: (r) => `${fmtCrypto(r.amount)} ${r.coin}` }, { h: "Credited", num: 1, v: (r) => (r.status === "credited" || r.status === "unconfirmed" ? fmtUSD(r.usd) : "–") }, { h: "Status", v: (r) => { const m = { credited: ["paid", "credited"], unconfirmed: ["paid", "credited · confirming"], awaiting: ["pending", "waiting"], processing: ["pending", "pending"], expired: ["rejected", "expired"] }[r.status] || [r.status, r.status]; return el("span", { class: `status st-${m[0]}` }, m[1]); } }], "No deposits yet"));
+        histDep.replaceChildren(table(w.deposits, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => r.coin }, { h: "Amount", num: 1, v: (r) => `${fmtCrypto(r.amount)} ${r.coin}` }, { h: "Credited", num: 1, v: (r) => (r.status === "credited" || r.status === "unconfirmed" ? fmtUSD(r.usd) + (r.bonus_usd > 0 ? ` + ${fmtUSD(r.bonus_usd)} bonus` : "") : "–") }, { h: "Status", v: (r) => { const m = { credited: ["paid", "credited"], unconfirmed: ["paid", "credited · confirming"], awaiting: ["pending", "waiting"], processing: ["pending", "pending"], expired: ["rejected", "expired"] }[r.status] || [r.status, r.status]; return el("span", { class: `status st-${m[0]}` }, m[1]); } }], "No deposits yet"));
         histWd.replaceChildren(table(w.withdrawals, [{ h: "Date", v: (r) => when(r.created_at) }, { h: "Coin", v: (r) => `${r.coin}${r.network ? ` · ${r.network}` : ""}` }, { h: "Address", v: (r) => `${r.address.slice(0, 8)}…${r.address.slice(-6)}` }, { h: "Amount", num: 1, v: (r) => `${fmtUSD(r.usd)} (${fmtCrypto(r.crypto_amount)} ${r.coin})` }, { h: "Status", v: (r) => el("span", { class: `status st-${r.status}` }, r.status) }], "No withdrawals yet"));
       } catch (e) { fail(e); }
     }

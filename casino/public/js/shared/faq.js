@@ -24,6 +24,8 @@
       ["Are there withdrawal fees?", "We don't charge a withdrawal fee, but the blockchain network fee may be deducted from the amount you receive."],
     ] },
     { cat: "Cashback & referrals", icon: "🎁", items: [
+      ["Is there a welcome bonus?", "Yes — a 50% first-deposit bonus, up to $100, on a first deposit of $75 or more. The bonus box is ticked by default in the Wallet; untick it if you don't want it. The bonus must be wagered 10× before you can withdraw (on top of the 1× on your deposit). It's for your first deposit only."],
+      ["Can I turn the bonus off?", "Yes. Untick \u201cClaim my 50% first-deposit bonus\u201d before you start your deposit and your deposit only needs to be wagered 1×. You can't add the bonus afterwards."],
       ["How does the 20% cashback work?", "Every week (Sunday 22:00 UTC to Sunday 22:00 UTC) we add up your real-money bets minus your real-money winnings, across casino and sports. If that's a loss, 20% of it is paid to your real balance automatically, with no wagering requirement."],
       ["When does cashback arrive?", "It's calculated when the week ends at Sunday 22:00 UTC and appears the next time you open the site. The Bonuses page shows a countdown and what you'd get if the week ended now."],
       ["How does the referral program work?", "Open Invite friends to get your personal link. When someone signs up through it, you earn 10% of their weekly net real-money losses, paid to your real balance every Sunday with no wagering requirement. There's no limit on how many friends you can invite."],

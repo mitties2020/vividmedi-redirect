@@ -188,7 +188,7 @@ module.exports = function createTelegram({ store, SP }) {
   }
 
   /* ---------------- Helper bot (direct messages) ---------------- */
-  const startText = () => `👋 <b>Welcome to CareQuay</b> — no-KYC crypto casino & pre-match sportsbook.\n\n• 20% cashback on weekly losses\n• Withdrawals usually in under 10 minutes\n• BTC, ETH, LTC, BNB and TRON\n\nCommands:\n/odds — today's top matches\n/cashback — weekly cashback\n/invite — your invite link (earn 10%)\n/balance — your balances\n/deposit — how to deposit\n/share — a card to share with friends\n\nSupport: support@carequay.com\n\nTo get bet and withdrawal alerts here, open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b>.${FOOTER}`;
+  const startText = () => `👋 <b>Welcome to CareQuay</b> — no-KYC crypto casino & pre-match sportsbook.\n\n• 50% first-deposit bonus (up to $100 on $75+)\n• 20% cashback on weekly losses\n• Withdrawals usually in under 10 minutes\n• BTC, ETH, LTC, BNB and TRON\n\nCommands:\n/odds — today's top matches\n/cashback — weekly cashback\n/invite — your invite link (earn 10%)\n/balance — your balances\n/deposit — how to deposit\n/share — a card to share with friends\n\nSupport: support@carequay.com\n\nTo get bet and withdrawal alerts here, open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b>.${FOOTER}`;
   const linkHint = () => `🔗 First connect your account: log in at ${SITE()}, open <b>Invite friends</b> and tap <b>Connect Telegram</b>.`;
 
   async function onMessage(m) {

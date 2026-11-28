@@ -224,7 +224,7 @@ route("GET", "/api/wallet", async ({ req }) => {
   const out = await store.tx(u.id, async (acct, ops) => { await settleCashback(acct, ops); return balances(acct); });
   const [deps, wds] = await Promise.all([store.deposits(u.id), store.withdrawals(u.id)]);
   const used = await withdrawnLast24h(u.id);
-  return { ...out, minWithdraw: MIN_WITHDRAW, dailyMax: DAILY_WITHDRAW, dailyLeft: Math.max(0, usd(DAILY_WITHDRAW * MICRO - used)), deposits: deps.map((d) => ({ ...d, usd: usd(d.usd) })), withdrawals: wds.map((w) => ({ ...w, usd: usd(w.usd) })) };
+  return { ...out, bonusOffer: { ...BONUS, eligible: !deps.some((d) => d.status === "credited" || d.status === "unconfirmed") }, minWithdraw: MIN_WITHDRAW, dailyMax: DAILY_WITHDRAW, dailyLeft: Math.max(0, usd(DAILY_WITHDRAW * MICRO - used)), deposits: deps.map((d) => ({ ...d, usd: usd(d.usd), bonus_usd: usd(d.bonus_usd || 0) })), withdrawals: wds.map((w) => ({ ...w, usd: usd(w.usd) })) };
 });
 
 route("POST", "/api/withdraw", async ({ req, body }) => {
@@ -551,21 +551,31 @@ route("GET", "/api/referral", async ({ req }) => {
 });
 
 /* ---------- Automatic deposits (watch the blockchain for each request's exact amount) ---------- */
+/* First-deposit bonus: 50% match on a first deposit of $75+, capped, bonus wagered 10×. Opt-in per deposit. */
+const BONUS = { min: Number(process.env.BONUS_MIN || 75), pct: Number(process.env.BONUS_PCT || 50), cap: Number(process.env.BONUS_CAP || 100), wager: Number(process.env.BONUS_WAGER || 10) };
+const bonusFor = (micro) => Math.min(Math.floor(micro * BONUS.pct / 100 / 10000) * 10000, BONUS.cap * MICRO);
+async function bonusEligible(userId) { return !(await store.deposits(userId)).some((d) => d.status === "credited" || d.status === "unconfirmed"); }
 async function creditDeposit(claim, { txid, confirmed }) {
   let price = Number(claim.price);
   if (Date.now() - new Date(claim.created_at).getTime() > CH.RATE_LOCK) { const p = (await S.prices().catch(() => [])).find((x) => x.sym === claim.coin); if (p && p.usd) price = p.usd; }
   const micro = Math.floor(Number(claim.amount) * price * 100) * 10000;
-  let done = false, email = "";
+  let done = false, email = "", bonus = 0;
   await store.tx(claim.user_id, async (acct, ops) => {
     if (!(await ops.matchDeposit(claim.id, txid, confirmed ? "credited" : "unconfirmed", micro, price))) return;
     acct.real_balance += micro; acct.wager_remaining += micro;
     await ops.ledger({ mode: "real", type: "deposit", amount: micro, meta: { id: claim.id, coin: claim.coin, amount: claim.amount, txid, auto: true } });
+    if (claim.bonus && micro >= BONUS.min * MICRO && !(await ops.hasOtherDeposit(claim.id))) {
+      bonus = bonusFor(micro);
+      acct.real_balance += bonus; acct.wager_remaining += bonus * BONUS.wager;
+      await ops.ledger({ mode: "real", type: "bonus", amount: bonus, meta: { id: claim.id, kind: "first_deposit", pct: BONUS.pct, wager: BONUS.wager } });
+      await ops.setDepositBonus(claim.id, bonus);
+    }
     done = true;
   });
   if (done) {
     const u = await store.users.byId(claim.user_id).catch(() => null); email = u ? u.email : `user ${claim.user_id}`;
-    TG.notify(claim.user_id, `💰 <b>Deposit received</b>\n${claim.amount} ${claim.coin} → ${TG.money(usd(micro))} added to your real balance.${confirmed ? "" : "\n<i>Withdrawals unlock once it has 1 confirmation.</i>"}`).catch(() => {});
-    TG.alertAdmin(null, `💰 <b>Deposit detected</b> — credited automatically\n${TG.esc(email)}: ${claim.amount} ${claim.coin} (${TG.money(usd(micro))})${confirmed ? "" : " · unconfirmed"}\n<code>${TG.esc(txid)}</code>`).catch(() => {});
+    TG.notify(claim.user_id, `💰 <b>Deposit received</b>\n${claim.amount} ${claim.coin} → ${TG.money(usd(micro))} added to your real balance.${bonus ? `\n🎁 Plus a ${TG.money(usd(bonus))} first-deposit bonus (wager it ${BONUS.wager}× to unlock withdrawal).` : ""}${confirmed ? "" : "\n<i>Withdrawals unlock once it has 1 confirmation.</i>"}`).catch(() => {});
+    TG.alertAdmin(null, `💰 <b>Deposit detected</b> — credited automatically\n${TG.esc(email)}: ${claim.amount} ${claim.coin} (${TG.money(usd(micro))})${bonus ? ` + ${TG.money(usd(bonus))} bonus` : ""}${confirmed ? "" : " · unconfirmed"}\n<code>${TG.esc(txid)}</code>`).catch(() => {});
   }
   return done;
 }
@@ -576,7 +586,9 @@ const CH = createChain({
 });
 route("POST", "/api/deposit/start", async ({ req, body }) => {
   const u = await requireUser(req);
-  try { return { ok: true, ...(await CH.start(u.id, body.coin, Math.round(Number(body.usd) * 100) / 100)) }; }
+  const amt = Math.round(Number(body.usd) * 100) / 100;
+  const wantBonus = body.bonus === true && amt >= BONUS.min && (await bonusEligible(u.id));
+  try { const r = await CH.start(u.id, body.coin, amt, { bonus: wantBonus }); return { ok: true, ...r, bonusUsd: wantBonus ? usd(bonusFor(Math.round(amt * MICRO))) : 0 }; }
   catch (e) { throw new HttpError(e.status || 500, e.message); }
 });
 route("GET", "/api/deposit/:id", async ({ req, params }) => {
@@ -584,7 +596,7 @@ route("GET", "/api/deposit/:id", async ({ req, params }) => {
   const d = await store.depositRequests.get(u.id, Number(params.id));
   if (!d) throw new HttpError(404, "Deposit not found.");
   CH.tick(false).catch(() => {});
-  return { id: d.id, coin: d.coin, amount: d.amount, status: d.status, usd: usd(d.usd), txid: d.txid, created: d.created_at, ...(d.status === "credited" || d.status === "unconfirmed" ? balances(await store.users.byId(u.id)) : {}) };
+  return { id: d.id, coin: d.coin, amount: d.amount, status: d.status, usd: usd(d.usd), bonus: usd(d.bonus_usd || 0), txid: d.txid, created: d.created_at, ...(d.status === "credited" || d.status === "unconfirmed" ? balances(await store.users.byId(u.id)) : {}) };
 });
 
 /* ---------- Owner alerts: real play, visitors ---------- */

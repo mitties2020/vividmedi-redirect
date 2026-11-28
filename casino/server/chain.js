@@ -106,7 +106,7 @@ module.exports = function createChain({ store, onCredit, onUnmatched, onStale })
   async function saveSeen(coin, set) { await store.kvSet(`chain:seen:${coin}`, [...set].slice(-800)); }
 
   /** Create a deposit request for a player. */
-  async function start(userId, coinSym, usd) {
+  async function start(userId, coinSym, usd, opts = {}) {
     const coin = String(coinSym || "").toUpperCase();
     if (!CFG[coin] || !addresses()[coin]) throw Object.assign(new Error("Choose a coin."), { status: 400 });
     if (!(usd >= 5)) throw Object.assign(new Error("The minimum deposit is $5."), { status: 400 });
@@ -118,9 +118,9 @@ module.exports = function createChain({ store, onCredit, onUnmatched, onStale })
     const taken = new Set((await store.depositRequests.open()).filter((d) => d.coin === coin).map((d) => d.units));
     const { units, amount } = makeAmount(coin, usd, p.usd, taken);
     const usdMicro = Math.round(Number(amount) * p.usd * 1e6);
-    const id = await store.depositRequests.create(userId, { coin, amount, units, usd: usdMicro, price: p.usd });
+    const id = await store.depositRequests.create(userId, { coin, amount, units, usd: usdMicro, price: p.usd, bonus: !!opts.bonus });
     setTimeout(() => tick(true).catch(() => {}), 15000);
-    return { id, coin, amount, units, address: addresses()[coin], network: S.COINS.find((c) => c.sym === coin).nets[0], usd: usdMicro / 1e6, price: p.usd, lockedUntil: new Date(Date.now() + RATE_LOCK).toISOString(), watchUntil: new Date(Date.now() + CLAIM_TTL).toISOString() };
+    return { id, coin, amount, units, address: addresses()[coin], network: S.COINS.find((c) => c.sym === coin).nets[0], usd: usdMicro / 1e6, price: p.usd, lockedUntil: new Date(Date.now() + RATE_LOCK).toISOString(), watchUntil: new Date(Date.now() + CLAIM_TTL).toISOString(), bonus: !!opts.bonus };
   }
 
   async function scanCoin(coin, open, unconfirmed) {
