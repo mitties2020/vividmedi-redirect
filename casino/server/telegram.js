@@ -33,6 +33,7 @@ module.exports = function createTelegram({ store, SP }) {
   }
   const send = (chat, text, extra = {}) => call("sendMessage", { chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra }).catch((e) => console.error("telegram:", e.message));
   const btn = (text, url) => ({ text, url });
+  const app = (text, path) => ({ text, web_app: { url: `${SITE()}${path}` } }); // opens inside Telegram (Mini App)
   const kb = (...rows) => ({ reply_markup: { inline_keyboard: rows } });
 
   async function init() {
@@ -50,6 +51,10 @@ module.exports = function createTelegram({ store, SP }) {
           { command: "share", description: "Get a card to share with friends" },
           { command: "help", description: "What I can do" },
         ] });
+        // "Play" button beside the message box opens the casino inside Telegram
+        await call("setChatMenuButton", { menu_button: { type: "web_app", text: "🎰 Play", web_app: { url: `${SITE()}/` } } }).catch((e) => console.error("telegram menu:", e.message));
+        await call("setMyShortDescription", { short_description: "No-KYC crypto casino & sportsbook. 50% welcome bonus, instant deposits, 20% weekly cashback." }).catch(() => {});
+        await call("setMyDescription", { description: "🎰 CareQuay — no-KYC crypto casino & pre-match sportsbook.\n\n🎁 50% welcome bonus — up to $100 extra on your first deposit\n⚡ Instant deposits in BTC, ETH, LTC, BNB & TRX\n💸 20% weekly cashback on losses\n🏦 Withdrawals usually in under 10 minutes\n\nPress Start to claim your bonus 👇" }).catch(() => {});
       }
       console.log(`Telegram bot @${botName} ready${CHANNEL ? `, channel ${CHANNEL}` : ""}`);
     } catch (e) { console.error("telegram init:", e.message); }
@@ -191,6 +196,17 @@ module.exports = function createTelegram({ store, SP }) {
   const startText = () => `👋 <b>Welcome to CareQuay</b> — no-KYC crypto casino & pre-match sportsbook.\n\n• 50% first-deposit bonus (up to $100 on $75+)\n• 20% cashback on weekly losses\n• Withdrawals usually in under 10 minutes\n• BTC, ETH, LTC, BNB and TRON\n\nCommands:\n/odds — today's top matches\n/cashback — weekly cashback\n/invite — your invite link (earn 10%)\n/balance — your balances\n/deposit — how to deposit\n/share — a card to share with friends\n\nSupport: support@carequay.com\n\nTo get bet and withdrawal alerts here, open <b>Invite friends</b> on the site and tap <b>Connect Telegram</b>.${FOOTER}`;
   const linkHint = () => `🔗 First connect your account: log in at ${SITE()}, open <b>Invite friends</b> and tap <b>Connect Telegram</b>.`;
 
+  async function welcome(chat, from, user) {
+    const name = esc(((from && from.first_name) || "").slice(0, 40)) || "there";
+    const caption = `👋 <b>Welcome, ${name}!</b>\n\n<b>CareQuay</b> — no-KYC crypto casino &amp; pre-match sportsbook.\n\n🎁 <b>50% welcome bonus</b> — up to $100 extra on your first deposit\n⚡ <b>Instant deposits</b> — credited in seconds\n💸 <b>20% weekly cashback</b> — on net losses, no wagering\n🏦 <b>Fast withdrawals</b> — usually under 10 minutes\n\n${user ? "Tap <b>Deposit</b> to top up 👇" : "Tap <b>Take Bonus</b> to start your winning streak 👇"}`;
+    const keyboard = kb(
+      [user ? app("💰 Deposit", "/app#/wallet") : app("🎁 Take Bonus", "/signup")],
+      [app("🎰 Casino", user ? "/app#/" : "/casino"), app("⚽ Sports", user ? "/app#/sports" : "/sports")],
+      [...(CHANNEL ? [btn("📣 Channel", `https://t.me/${CHANNEL.replace(/^@/, "")}`)] : []), app("❓ FAQ", "/faq")]);
+    try { return await call("sendPhoto", { chat_id: chat, photo: `${SITE()}/img/tg-welcome.jpg`, caption, parse_mode: "HTML", ...keyboard }); }
+    catch (e) { console.error("telegram welcome:", e.message); return send(chat, caption, keyboard); }
+  }
+
   async function onMessage(m) {
     const chat = m.chat && m.chat.id;
     if (!chat || m.chat.type !== "private" || typeof m.text !== "string") return;
@@ -217,7 +233,7 @@ module.exports = function createTelegram({ store, SP }) {
           const u = await store.users.byId(uid);
           return send(chat, `✅ Connected to <b>${esc(u.email)}</b>.\n\nYou'll get a message here when a sports bet settles, a deposit is credited, a withdrawal is paid or you earn from referrals. Send /balance any time.`);
         }
-        return send(chat, startText(), kb([btn("🎰 Open CareQuay", `${SITE()}/`)], [btn("⚽ Sportsbook", `${SITE()}/sports`), btn("💸 Cashback", `${SITE()}/bonus/cashback`)]));
+        return welcome(chat, m.from, user);
       }
       case "/odds": {
         const text = fixturesText(await upcoming(36, 6), "Top matches");
