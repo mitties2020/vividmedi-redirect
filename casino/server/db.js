@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS sports_bets (
 CREATE INDEX IF NOT EXISTS sports_bets_user ON sports_bets (user_id, id);
 CREATE INDEX IF NOT EXISTS sports_bets_open ON sports_bets (status, commence_time);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ref_code TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_ref_code ON users (lower(ref_code)) WHERE ref_code IS NOT NULL;
 CREATE TABLE IF NOT EXISTS referral_rewards (
@@ -118,7 +119,7 @@ const userRow = (r) => r && {
   created_at: new Date(r.created_at),
   fun_balance: num(r.fun_balance), real_balance: num(r.real_balance), wager_remaining: num(r.wager_remaining),
   cashback_until: r.cashback_until ? new Date(r.cashback_until) : null,
-  ref_code: r.ref_code || null, referred_by: r.referred_by == null ? null : num(r.referred_by),
+  ref_code: r.ref_code || null, telegram_chat_id: r.telegram_chat_id == null ? null : num(r.telegram_chat_id), referred_by: r.referred_by == null ? null : num(r.referred_by),
 };
 const betRow = (x) => x && { ...x, id: num(x.id), user_id: num(x.user_id), point: x.point == null ? null : num(x.point), odds: num(x.odds), stake: num(x.stake), payout: num(x.payout), commence_time: new Date(x.commence_time) };
 const ACCT_FIELDS = ["fun_balance", "real_balance", "wager_remaining", "cashback_until"];
@@ -137,6 +138,8 @@ function pgStore(url) {
         const r = await q("INSERT INTO users (email, pass_hash, referred_by) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING RETURNING *", [email, passHash, referredBy || null]);
         return userRow(r.rows[0]) || null;
       },
+      async byTelegram(chatId) { return userRow((await q("SELECT * FROM users WHERE telegram_chat_id = $1", [chatId])).rows[0]); },
+      async setTelegram(id, chatId) { if (chatId != null) await q("UPDATE users SET telegram_chat_id = NULL WHERE telegram_chat_id = $1", [chatId]); await q("UPDATE users SET telegram_chat_id = $2 WHERE id = $1", [id, chatId]); },
       async byRefCode(code) { return userRow((await q("SELECT * FROM users WHERE lower(ref_code) = lower($1)", [code])).rows[0]); },
       async setRefCode(id, code) { try { const r = await q("UPDATE users SET ref_code = $2 WHERE id = $1 AND ref_code IS NULL", [id, code]); return r.rowCount === 1; } catch (e) { if (e.code === "23505") return false; throw e; } },
       async byEmail(email) { return userRow((await q("SELECT * FROM users WHERE email = $1", [email])).rows[0]); },
@@ -271,6 +274,8 @@ function memStore() {
       },
       async byEmail(email) { const id = byEmail.get(email); return id ? { ...users.get(id) } : null; },
       async byId(id) { const u = users.get(id); return u ? { ...u } : null; },
+      async byTelegram(chatId) { for (const u of users.values()) if (u.telegram_chat_id === chatId) return { ...u }; return null; },
+      async setTelegram(id, chatId) { for (const u of users.values()) if (chatId != null && u.telegram_chat_id === chatId) u.telegram_chat_id = null; const u = users.get(id); if (u) u.telegram_chat_id = chatId; },
       async byRefCode(code) { for (const u of users.values()) if (u.ref_code && u.ref_code.toLowerCase() === String(code).toLowerCase()) return { ...u }; return null; },
       async setRefCode(id, code) { for (const u of users.values()) if (u.ref_code && u.ref_code.toLowerCase() === code.toLowerCase()) return false; const u = users.get(id); if (!u || u.ref_code) return false; u.ref_code = code; return true; },
       async setConfirmed(id) { users.get(id).confirmed = true; },

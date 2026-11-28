@@ -26,6 +26,11 @@ withdrawal requests, 20% weekly cashback (Sunday 22:00 UTC).
 | `ODDS_SPREADS` | `0` turns off handicap markets (halves credit use) |
 | `SPORTS_MARGIN` | Margin added over the fair market price (default 0.06) |
 | `SPORTS_MAX_STAKE` / `SPORTS_MAX_PAYOUT` | Per-bet limits in USD (default 500 / 5000) |
+| `SITE_URL` | Public address, e.g. `https://www.carequay.com` (links, sitemap, redirects other hostnames here) |
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather — turns on the Telegram bot |
+| `TELEGRAM_CHANNEL` | Your channel's @username — the bot posts fixtures, big wins and cashback reminders there |
+| `TG_POST_HOURS` | UTC hours for the daily fixtures posts (default `1,11` = 9am and 7pm Perth) |
+| `CRON_KEY` | Secret for `/api/cron?key=…` — an outside pinger can run background jobs and keep the free server awake |
 | `SPORTS_LEAGUES` | Optional comma list of league keys to offer instead of the defaults |
 
 Without email settings, confirmation/reset links are written to the server log.

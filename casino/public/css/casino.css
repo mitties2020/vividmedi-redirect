@@ -960,3 +960,8 @@ body[data-mode="real"] .topbar { box-shadow: inset 0 -2px 0 rgba(245, 196, 81, .
 .ref-share { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 760px) { .ref-row { flex-direction: column; } }
 .auth-foot a.auth-inline { text-decoration: none; }
+.tg-panel:not([hidden]) { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-color: rgba(42, 171, 238, .4); background: linear-gradient(135deg, rgba(42, 171, 238, .12), transparent 60%), var(--bg-2); }
+.tg-panel h2 { margin: 0 0 4px; }
+.tg-panel p { margin: 0; }
+.tg-ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(180deg, #37bbfe, #1d93d2); font-size: 1.5rem; }
+.tg-actions { display: flex; gap: 8px; flex-wrap: wrap; }

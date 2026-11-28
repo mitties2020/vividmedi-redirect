@@ -195,7 +195,8 @@ module.exports = function createSports(store) {
     return null;
   }
   /** r: { winner?: name|"Draw", homeScore?, awayScore?, void?: true, source } — settles every open bet on the event it can. */
-  async function settleEvent(eventId, r, { creditAcct, gameName }) {
+  async function settleEvent(eventId, r, helpers) {
+    const { creditAcct, gameName } = helpers;
     const bets = await store.sports.openForEvent(eventId);
     let settled = 0, skipped = 0;
     for (const b of bets) {
@@ -207,6 +208,7 @@ module.exports = function createSports(store) {
         if (!ok) return;
         if (payout > 0) { creditAcct(acct, b.mode, payout); await ops.ledger({ mode: b.mode, type: "win", amount: payout, game: gameName(b), meta: { sportsBet: b.id, status: oc.status } }); }
         settled++;
+        if (helpers.onSettled) setImmediate(() => helpers.onSettled(b, oc.status, payout, r));
       });
     }
     return { settled, skipped };

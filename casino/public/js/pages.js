@@ -194,12 +194,25 @@
     const shareRow = el("div", { class: "ref-share" });
     const stats = el("div", { class: "cb-stats" });
     const hist = el("div", { class: "table-wrap" });
+    const tgPanel = el("section", { class: "panel tg-panel", hidden: true });
+    api("/api/telegram/link", null, null, { noBalance: true }).then((t) => {
+      if (!t.enabled || !t.url) return;
+      tgPanel.hidden = false;
+      tgPanel.replaceChildren(
+        el("div", { class: "tg-ico" }, "✈️"),
+        el("div", { class: "grow" }, el("h2", {}, t.linked ? "Telegram connected" : "Get alerts on Telegram"),
+          el("p", { class: "muted" }, t.linked ? "You'll get a message when a bet settles, a deposit lands, a withdrawal is sent or you earn from referrals." : "Connect our Telegram bot to get bet results, deposit and withdrawal alerts, and your invite link on the go.")),
+        el("div", { class: "tg-actions" },
+          el("a", { class: "btn btn-gold", href: t.url, target: "_blank", rel: "noopener" }, t.linked ? "Reconnect" : "Connect Telegram"),
+          t.channel ? el("a", { class: "btn btn-ghost", href: `https://t.me/${String(t.channel).replace(/^@/, "")}`, target: "_blank", rel: "noopener" }, "Join our channel") : null));
+    }).catch(() => {});
     view.replaceChildren(
       head("🤝", "Invite friends", "Earn 10% of your friends' weekly net losses — paid every Sunday."),
       el("section", { class: "cb-hero ref-hero" },
         el("div", {}, el("p", { class: "hero-kicker" }, "Refer & earn"), el("h2", {}, el("span", {}, "10%"), " every week"), el("p", {}, "Share your link. When friends sign up through it, you get 10% of their net real-money losses for every cashback week, paid to your real balance with no wagering requirement.")),
         el("div", { class: "ref-box" }, el("small", {}, "Your invite link"), el("div", { class: "ref-row" }, linkIn, copyBtn), shareRow)),
       stats,
+      tgPanel,
       el("section", { class: "panel" }, el("h2", {}, "How it works"), el("ol", { class: "how" },
         el("li", {}, "Share your link anywhere — Telegram, Discord, X, WhatsApp."),
         el("li", {}, "Friends who open it and sign up within 30 days are linked to you."),

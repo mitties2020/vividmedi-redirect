@@ -9,6 +9,7 @@ const G = require("./server/games");
 const T = require("./public/js/shared/tables.js");
 const createSports = require("./server/sports");
 const createSite = require("./server/site");
+const createTelegram = require("./server/telegram");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC = path.join(__dirname, "public");
@@ -22,6 +23,7 @@ const REQUIRE_CONFIRM = process.env.REQUIRE_EMAIL_CONFIRM === "1"; // off: accou
 const store = createStore();
 const SP = createSports(store);
 let SITE = null; // created once currentUser is defined
+const TG = createTelegram({ store, SP });
 
 const usd = (micro) => Math.floor(micro / 10000) / 100; // micro → dollars (cents precision, floored)
 const usdx = (micro) => micro / MICRO;                    // exact
@@ -273,6 +275,7 @@ route("POST", "/api/play/:game", async ({ req, body, params }) => {
     debitAcct(acct, mode, out.stake);
     await ops.ledger({ mode, type: "bet", amount: out.stake, game: name });
     if (out.payout > 0) { creditAcct(acct, mode, out.payout); await ops.ledger({ mode, type: "win", amount: out.payout, game: name }); }
+    if (out.payout > 0 && mode === "real") setImmediate(() => TG.bigWin({ game: name, stake: usdx(out.stake), payout: usdx(out.payout), mode }).catch(() => {}));
     return { result: out.result, stake: usdx(out.stake), payout: usdx(out.payout), mode, ...balances(acct) };
   });
 });
@@ -350,6 +353,7 @@ route("POST", "/api/admin/deposit", async ({ req, body }) => {
     acct.real_balance += micro; acct.wager_remaining += micro;
     const id = await ops.deposit({ coin: coin.sym, amount, usd: micro, price, txid: body.txid || null });
     await ops.ledger({ mode: "real", type: "deposit", amount: micro, meta: { id, coin: coin.sym, amount } });
+    setImmediate(() => TG.notify(u.id, `💰 <b>Deposit credited</b>\n${amount} ${coin.sym} → ${TG.money(usd(micro))} added to your real balance.`).catch(() => {}));
     return { ok: true, id, credited: usd(micro), ...balances(acct) };
   });
 });
@@ -391,7 +395,7 @@ route("POST", "/api/admin/withdrawals/:id", async ({ req, body, params }) => {
   const w = await store.withdrawalById(Number(params.id));
   if (!w) throw new HttpError(404, "No such withdrawal.");
   if (w.status !== "pending") throw new HttpError(409, `Withdrawal is already ${w.status}.`);
-  if (body.status === "paid") { await store.setWithdrawal(w.id, "paid", body.txid); return { ok: true }; }
+  if (body.status === "paid") { await store.setWithdrawal(w.id, "paid", body.txid); TG.notify(w.user_id, `💸 <b>Withdrawal sent</b>\n${Number(w.crypto_amount)} ${w.coin} (${TG.money(usd(w.usd))}) is on its way to your wallet.`).catch(() => {}); return { ok: true }; }
   if (body.status === "rejected") {
     await store.tx(w.user_id, async (acct, ops) => { acct.real_balance += Number(w.usd); await ops.ledger({ mode: "real", type: "withdraw_refund", amount: Number(w.usd), meta: { id: w.id } }); });
     await store.setWithdrawal(w.id, "rejected", null);
@@ -402,7 +406,16 @@ route("POST", "/api/admin/withdrawals/:id", async ({ req, body, params }) => {
 
 /* ---------- Sportsbook (pre-match only) ---------- */
 const sportsName = (b) => `${b.home} v ${b.away}`;
-const sportsHelpers = { creditAcct, gameName: sportsName };
+const sportsHelpers = {
+  creditAcct, gameName: sportsName,
+  onSettled(b, status, payout, r) {
+    const sel = b.market === "spreads" ? `${b.selection} ${b.point > 0 ? "+" : ""}${b.point}` : b.selection === "Draw" ? "Draw" : `${b.selection} to win`;
+    const score = r.homeScore != null ? ` (${r.homeScore}–${r.awayScore})` : "";
+    const line = { won: `✅ <b>Bet won!</b> ${TG.money(usdx(payout))} paid`, lost: "❌ <b>Bet lost</b>", push: `↩️ <b>Bet refunded</b> ${TG.money(usdx(payout))}`, void: `↩️ <b>Bet void</b> — ${TG.money(usdx(payout))} refunded` }[status];
+    TG.notify(b.user_id, `${line}\n${sel} @ ${Number(b.odds).toFixed(2)}\n${b.home} v ${b.away}${score}${b.mode === "fun" ? "\n<i>Fun mode</i>" : ""}`).catch(() => {});
+    if (status === "won" && b.mode === "real") TG.bigWin({ game: `${b.home} v ${b.away}`, stake: usdx(b.stake), payout: usdx(payout), mode: "real" }).catch(() => {});
+  },
+};
 const betView = (b) => ({ id: b.id, mode: b.mode, sport: b.sport_key, league: b.sport_title, home: b.home, away: b.away, commence: b.commence_time, market: b.market, selection: b.selection, point: b.point, odds: b.odds, stake: usdx(b.stake), status: b.status, payout: usdx(b.payout), potential: usdx(Math.floor(b.stake * b.odds)), result: b.result && { homeScore: b.result.homeScore, awayScore: b.result.awayScore, winner: b.result.winner }, placed: b.created_at, settled: b.settled_at });
 let lastAuto = 0;
 const maybeAutoSettle = () => { if (Date.now() - lastAuto < 5 * 60e3) return; lastAuto = Date.now(); SP.autoSettle(sportsHelpers).catch((e) => console.error("auto-settle:", e.message)); };
@@ -505,6 +518,7 @@ async function settleReferrals() {
         if (!(await ops.referralReward({ user_id: r.user_id, week_start: from, net: r.net, amount }))) return;
         acct.real_balance += amount;
         await ops.ledger({ mode: "real", type: "referral", amount, meta: { from: from.toISOString(), to: to.toISOString() } });
+        setImmediate(() => TG.notify(r.referrer_id, `🤝 <b>Referral earnings</b>\n${TG.money(usdx(amount))} added to your real balance from a friend you invited.`).catch(() => {}));
       });
     }
   }
@@ -519,6 +533,30 @@ route("GET", "/api/referral", async ({ req }) => {
   const st = await store.referrals.stats(u.id);
   const base = (process.env.SITE_URL || `${(req.headers["x-forwarded-proto"] || "http").split(",")[0]}://${req.headers.host}`).replace(/\/$/, "");
   return { code, link: `${base}/r/${code}`, rate: REFERRAL_RATE, invited: st.invited, earned: usdx(st.earned), weeks: st.recent.map((x) => ({ week: x.week_start, amount: usdx(x.amount), players: x.players })), nextPayout: S.nextBoundary(new Date()).toISOString() };
+});
+
+/* ---------- Telegram ---------- */
+route("POST", "/api/telegram/webhook", async ({ req, body }) => {
+  if (!(await TG.webhook(req, body))) throw new HttpError(404, "Not found.");
+  return { ok: true };
+});
+route("GET", "/api/telegram/link", async ({ req }) => {
+  const u = await requireUser(req);
+  if (!TG.enabled()) return { enabled: false };
+  await ensureRefCode(u);
+  return { enabled: true, linked: !!u.telegram_chat_id, bot: TG.botName(), channel: TG.channel || null, url: await TG.linkUrl(u.id) };
+});
+/* Background jobs. Also reachable at /api/cron?key=CRON_KEY so an outside pinger can run them (and keep the free server awake). */
+async function runJobs() {
+  maybeAutoSettle(); maybeSettleReferrals();
+  await TG.tick().catch((e) => console.error("telegram tick:", e.message));
+}
+setInterval(runJobs, 5 * 60e3).unref();
+route("GET", "/api/cron", async ({ url }) => {
+  const k = process.env.CRON_KEY;
+  if (!k || url.searchParams.get("key") !== k) throw new HttpError(404, "Not found.");
+  await runJobs();
+  return { ok: true };
 });
 
 route("GET", "/api/health", async () => ({ ok: true, store: store.kind, email: S.emailConfigured() }));
@@ -585,7 +623,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-store.init().then(() => server.listen(PORT, () => console.log(`CareQuay Casino on :${PORT} (store: ${store.kind}, email: ${S.emailConfigured() ? "on" : "log only"})`)))
+store.init().then(() => server.listen(PORT, () => { TG.init().then(runJobs); console.log(`CareQuay Casino on :${PORT} (store: ${store.kind}, email: ${S.emailConfigured() ? "on" : "log only"})`); }))
   .catch((e) => { console.error("Startup failed:", e); process.exit(1); });
 
 module.exports = { server, store, settleReferrals };
